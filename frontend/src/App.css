@@ -72,15 +72,12 @@
 .message-content {
   padding: 12px 16px;
   line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .message-content p {
   margin: 0;
   margin-bottom: 8px;
-}
-
-.message-content p:last-child {
-  margin-bottom: 0;
 }
 
 .input-form {
@@ -104,20 +101,95 @@
   border-radius: 4px;
   font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.2s;
 }
 
-.input-form button:hover {
-  background-color: #0056b3;
+/* Agent Process Container */
+.agent-process-container {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 80%;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  transition: all 0.3s ease;
 }
 
-.input-form button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+.agent-process-container.active {
+  border-color: #007bff;
+  box-shadow: 0 0 5px rgba(0,123,255,0.2);
 }
 
-.welcome-message {
-  text-align: center;
-  color: #666;
-  margin-top: 50px;
+.agent-process-container.complete {
+  border-color: #dee2e6;
+  opacity: 0.8;
+}
+
+.process-header {
+  padding: 10px 15px;
+  background: #f1f3f5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #495057;
+  user-select: none;
+}
+
+.process-header:hover {
+  background: #e9ecef;
+}
+
+.steps-list {
+  padding: 10px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 2px solid #ced4da;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-name {
+  font-size: 0.9rem;
+  color: #868e96; /* Gray as requested */
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.step-title {
+  font-size: 0.9rem;
+  font-weight: bold; /* Bold as requested */
+  color: #343a40;
+}
+
+.step-content {
+  font-size: 0.9rem;
+  color: #495057; /* Regular color */
+  white-space: pre-wrap;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.step-item.loading {
+  border-left: none;
+  padding-left: 0;
+  align-items: center;
+  color: #adb5bd;
+  font-style: italic;
+  font-size: 0.85rem;
 }
