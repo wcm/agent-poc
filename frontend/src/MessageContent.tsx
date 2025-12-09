@@ -31,7 +31,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
 				if (part.startsWith("${{AD:")) {
 					const adId = part.match(/\${{AD:([^}]+)}}/)?.[1];
 					return (
-						<button key={index} className="interactive-btn ad-button" onClick={() => alert(`Clicked Ad: ${adId}`)}>
+						<button key={index} className="interactive-btn detail-btn" onClick={() => alert(`Clicked Ad: ${adId}`)}>
 							View Ad Details
 						</button>
 					);

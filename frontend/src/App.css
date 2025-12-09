@@ -299,13 +299,13 @@
   transition: all 0.2s;
 }
 
-.ad-button {
+.detail-btn {
   background-color: #fff5ec;
   color: #F66C30;
   border-color: #ffd1b3;
 }
 
-.ad-button:hover {
+.detail-btn:hover {
   background-color: #ffe0cc;
 }
 
