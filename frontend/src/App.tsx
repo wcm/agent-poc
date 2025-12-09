@@ -143,9 +143,6 @@ function App() {
 			<div className="chat-container">
 				{messages.length === 0 && (
 					<div className="empty-state-container">
-						<div className="welcome-message">
-							<p>Hello! I can help you analyze marketing data. Ask me about campaigns, ROAS, or strategy.</p>
-						</div>
 						<div className="suggested-questions-container">
 							<button
 								className="suggested-card"
