@@ -31,14 +31,14 @@ export const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
 				if (part.startsWith("${{AD:")) {
 					const adId = part.match(/\${{AD:([^}]+)}}/)?.[1];
 					return (
-						<button key={index} className="interactive-btn ad-btn" onClick={() => alert(`Clicked Ad: ${adId}`)}>
+						<button key={index} className="interactive-btn ad-button" onClick={() => alert(`Clicked Ad: ${adId}`)}>
 							View Ad Details
 						</button>
 					);
 				} else if (part.startsWith("${{PAGE:")) {
 					const pageName = part.match(/\${{PAGE:([^}]+)}}/)?.[1] || "";
 					return (
-						<button key={index} className="interactive-btn page-btn" onClick={() => alert(`Redirecting to: ${toTitleCase(pageName)}`)}>
+						<button key={index} className="interactive-btn page-button" onClick={() => alert(`Redirecting to: ${toTitleCase(pageName)}`)}>
 							Go to {toTitleCase(pageName)}
 						</button>
 					);

@@ -299,23 +299,23 @@
   transition: all 0.2s;
 }
 
-.ad-btn {
+.ad-button {
   background-color: #fff5ec;
   color: #F66C30;
   border-color: #ffd1b3;
 }
 
-.ad-btn:hover {
+.ad-button:hover {
   background-color: #ffe0cc;
 }
 
-.page-btn {
+.page-button {
   background-color: #fff5ec;
   color: #F66C30;
   border-color: #ffd1b3;
 }
 
-.page-btn:hover {
+.page-button:hover {
   background-color: #ffe0cc;
 }
 

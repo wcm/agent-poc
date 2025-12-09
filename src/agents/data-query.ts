@@ -5,7 +5,7 @@ class DataQueryAgentWrapper extends Agent {
     async process(input: string): Promise<string> {
         // 1. Get the Query Object from the LLM
         const queryJsonString = await super.process(input);
-        
+
         let queryObj;
         try {
             // Clean up Markdown if present
@@ -18,7 +18,7 @@ class DataQueryAgentWrapper extends Agent {
         // 2. Call the Tool
         try {
             const data = await callAPI(queryObj);
-            
+
             // 3. Return the Combined Output
             return `QUERY GENERATED:
 ${JSON.stringify(queryObj, null, 2)}
@@ -26,7 +26,7 @@ ${JSON.stringify(queryObj, null, 2)}
 DATA RETRIEVED (Mock):
 ${JSON.stringify(data, null, 2)}`;
         } catch (e: any) {
-             return `Error fetching data: ${e.message}`;
+            return `Error fetching data: ${e.message}`;
         }
     }
 }

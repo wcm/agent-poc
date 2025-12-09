@@ -81,6 +81,16 @@ function App() {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	};
 
+	// Clear server history on initial load (page refresh)
+	useEffect(() => {
+		const apiUrl = window.location.hostname === "localhost" 
+			? "http://localhost:3001/api/clear" 
+			: "/api/clear";
+			
+		fetch(apiUrl, { method: "POST" })
+			.catch(err => console.error("Failed to clear history:", err));
+	}, []);
+
 	useEffect(() => {
 		scrollToBottom();
 	}, [messages, currentProcessSteps]);
@@ -97,7 +107,13 @@ function App() {
 		stepsRef.current = []; // Reset ref
 
 		// Use SSE for streaming updates
-		const eventSource = new EventSource(`/api/stream?message=${encodeURIComponent(userMessage.content)}`);
+		// Use SSE for streaming updates
+		// Use direct URL for localhost to avoid proxy buffering, relative path for production
+		const apiUrl = window.location.hostname === "localhost" 
+			? `http://localhost:3001/api/stream?message=${encodeURIComponent(userMessage.content)}`
+			: `/api/stream?message=${encodeURIComponent(userMessage.content)}`;
+			
+		const eventSource = new EventSource(apiUrl);
 
 		eventSource.onmessage = (event) => {
 			const data = JSON.parse(event.data);
