@@ -9,25 +9,46 @@ import { EventEmitter } from 'events';
 
 export class Orchestrator extends EventEmitter {
     private context: GlobalContext;
+    private conversationHistory: { role: string, content: string }[] = [];
 
     constructor() {
         super();
         this.context = {
             userInput: '',
+            conversationHistory: [],
             plan: null,
             currentStepIndex: 0,
             globalOutput: []
         };
     }
 
+    // New method to clear history if needed (e.g. via API)
+    clearHistory() {
+        this.conversationHistory = [];
+        console.log("[Orchestrator] History cleared.");
+    }
+
+    // Helper to get recent history for context (Sliding Window)
+    private getRecentHistory(limit: number = 5): string {
+        if (this.conversationHistory.length === 0) return "No previous conversation.";
+        
+        const recent = this.conversationHistory.slice(-limit);
+        return recent.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
+    }
+
     async handleRequest(userInput: string): Promise<string> {
         console.log("[Orchestrator] Starting request handling...");
         this.context.userInput = userInput;
-
+        // this.context.conversationHistory is not strictly needed by sub-agents if we pass it explicitly
+        
         try {
             // 1. Guardrail Check
             this.emit('progress', { agent: 'guardrails', title: 'Safety Check', content: 'Validating input safety and relevance...' });
-            const guardResult = await Guardrails.validateInput(userInput);
+            
+            // Pass recent history to guardrails for context-aware checks
+            const historyForGuardrail = this.getRecentHistory(4); 
+            const guardResult = await Guardrails.validateInput(userInput, historyForGuardrail);
+            
             if (!guardResult.passed) {
                 console.warn("[Orchestrator] Guardrail blocked request.");
                 // Throw an error with the specific reason to trigger the catch block
@@ -38,9 +59,18 @@ export class Orchestrator extends EventEmitter {
             console.log("[Orchestrator] Planning...");
             this.emit('progress', { agent: 'planner', title: 'Planning', content: 'Analyzing request and creating execution plan...' });
             
+            // Format input for planner with Sliding Window History
+            const recentHistory = this.getRecentHistory(10); // 10 messages = 5 turns
+            const plannerInput = `
+HISTORY (Last 5 turns):
+${recentHistory}
+
+CURRENT USER REQUEST:
+${userInput}
+`;
             let planJson;
             try {
-                planJson = await plannerAgent.process(userInput);
+                planJson = await plannerAgent.process(plannerInput);
             } catch (e: any) {
                 throw new Error(`Planning failed: ${e.message}`);
             }
@@ -88,7 +118,15 @@ export class Orchestrator extends EventEmitter {
 
                 try {
                     if (task.assignedAgent === 'reasoning') {
-                        taskResult = await reasoningAgent.process(taskInput);
+                        // Pass history to reasoning agent too
+                        const historyContext = this.getRecentHistory(6); 
+                        const reasoningInput = `
+${taskInput}
+
+CONVERSATION HISTORY:
+${historyContext}
+`;
+                        taskResult = await reasoningAgent.process(reasoningInput);
                     } else if (task.assignedAgent === 'data-query') {
                         taskResult = await dataQueryAgent.process(taskInput);
                     } else {
@@ -129,6 +167,11 @@ Please summarize this into a final answer for the user.
             } catch (e: any) {
                 throw new Error(`Final response generation failed: ${e.message}`);
             }
+
+            // Update History
+            this.conversationHistory.push({ role: 'user', content: userInput });
+            this.conversationHistory.push({ role: 'assistant', content: finalAnswer });
+
             return finalAnswer;
 
         } catch (error: any) {

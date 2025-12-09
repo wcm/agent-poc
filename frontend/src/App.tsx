@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./App.css";
+import { MessageContent } from "./MessageContent"; // Import the new component
+import logo from "./assets/logo.svg";
 
 interface Message {
 	role: "user" | "assistant";
@@ -17,6 +19,7 @@ interface StepUpdate {
 // Separate component for the Agent Thinking Process
 const AgentProcessDisplay: React.FC<{ steps: StepUpdate[]; isComplete: boolean }> = ({ steps, isComplete }) => {
 	const [isCollapsed, setIsCollapsed] = useState(false);
+	const stepsEndRef = useRef<HTMLDivElement>(null);
 
 	// Auto-collapse when complete
 	useEffect(() => {
@@ -24,6 +27,13 @@ const AgentProcessDisplay: React.FC<{ steps: StepUpdate[]; isComplete: boolean }
 			setIsCollapsed(true);
 		}
 	}, [isComplete]);
+
+	// Scroll to bottom when steps update (only if not complete/collapsed)
+	useEffect(() => {
+		if (!isComplete && !isCollapsed) {
+			stepsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+		}
+	}, [steps, isComplete, isCollapsed]);
 
 	if (steps.length === 0) return null;
 
@@ -45,6 +55,12 @@ const AgentProcessDisplay: React.FC<{ steps: StepUpdate[]; isComplete: boolean }
 							<div className="step-content">{step.content}</div>
 						</div>
 					))}
+					{!isComplete && (
+						<div className="step-item loading">
+							<span className="loading-dots">Thinking...</span>
+						</div>
+					)}
+					<div ref={stepsEndRef} />
 				</div>
 			)}
 		</div>
@@ -81,7 +97,7 @@ function App() {
 		stepsRef.current = []; // Reset ref
 
 		// Use SSE for streaming updates
-		const eventSource = new EventSource(`http://localhost:3001/api/stream?message=${encodeURIComponent(userMessage.content)}`);
+		const eventSource = new EventSource(`/api/stream?message=${encodeURIComponent(userMessage.content)}`);
 
 		eventSource.onmessage = (event) => {
 			const data = JSON.parse(event.data);
@@ -122,38 +138,60 @@ function App() {
 	return (
 		<div className="App">
 			<header className="App-header">
-				<h1>Claude Marketing Agent</h1>
+				<img src={logo} className="app-logo" alt="Atria Logo" />
 			</header>
 			<div className="chat-container">
-				<div className="messages">
-					{messages.length === 0 && (
+				{messages.length === 0 && (
+					<div className="empty-state-container">
 						<div className="welcome-message">
 							<p>Hello! I can help you analyze marketing data. Ask me about campaigns, ROAS, or strategy.</p>
 						</div>
-					)}
+						<div className="suggested-questions-container">
+							<button
+								className="suggested-card"
+								onClick={() => setInput("Based on my current performance, which ads should I experiment more with, and why?")}
+							>
+								<span className="card-title">Analyse Data</span>
+								<span className="card-subtitle">Which ads need more experimentation?</span>
+							</button>
+							<button
+								className="suggested-card"
+								onClick={() => setInput("Why are my best ads performing well? Compare their key efficiency and conversion metrics to show what they’re doing better.")}
+							>
+								<span className="card-title">Explain</span>
+								<span className="card-subtitle">Why are my best ads performing well?</span>
+							</button>
+							<button
+								className="suggested-card"
+								onClick={() => setInput("Given my recent performance trends, what are the top 3 recommended actions I should take right now to improve results?")}
+							>
+								<span className="card-title">Recommend Actions</span>
+								<span className="card-subtitle">What are the top 3 actions to take now?</span>
+							</button>
+						</div>
+					</div>
+				)}
 
-					{messages.map((msg, index) => (
-						<React.Fragment key={index}>
-							{/* If this message has attached steps, show them BEFORE the message content */}
-							{msg.steps && msg.steps.length > 0 && <AgentProcessDisplay steps={msg.steps} isComplete={true} />}
+				{messages.map((msg, index) => (
+					<React.Fragment key={index}>
+						{/* If this message has attached steps, show them BEFORE the message content */}
+						{msg.steps && msg.steps.length > 0 && <AgentProcessDisplay steps={msg.steps} isComplete={true} />}
 
-							<div className={`message ${msg.role}`}>
-								<div className="message-content">
-									{msg.content.split("\n").map((line, i) => (
-										<p key={i}>{line}</p>
-									))}
-								</div>
-							</div>
-						</React.Fragment>
-					))}
+						<div className={`message ${msg.role}`}>
+							{/* Use the new MessageContent component for parsing buttons */}
+							<MessageContent content={msg.content} />
+						</div>
+					</React.Fragment>
+				))}
 
-					{/* Current Active Process Display (Only show when loading) */}
-					{isLoading && currentProcessSteps.length > 0 && <AgentProcessDisplay steps={currentProcessSteps} isComplete={false} />}
+				{/* Current Active Process Display (Only show when loading) */}
+				{isLoading && currentProcessSteps.length > 0 && <AgentProcessDisplay steps={currentProcessSteps} isComplete={false} />}
 
-					<div ref={messagesEndRef} />
-				</div>
+				<div ref={messagesEndRef} />
+			</div>
+			<div className="input-container">
 				<form onSubmit={handleSubmit} className="input-form">
-					<input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="e.g. Calculate ROAS for my Facebook ads..." disabled={isLoading} />
+					<input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask me anything..." disabled={isLoading} />
 					<button type="submit" disabled={isLoading || !input.trim()}>
 						Send
 					</button>

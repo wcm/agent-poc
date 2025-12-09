@@ -29,7 +29,7 @@ export async function callAPI(query: QueryObject): Promise<any[]> {
     for (let i = 0; i < count; i++) {
         const row: any = {};
         
-        // Handle GroupBy
+        // Handle GroupBy - ensure the groupBy dimension is always included
         if (query.groupBy) {
              if (query.groupBy === 'ad_format') {
                  const formats = ['VIDEO', 'IMAGE', 'CAROUSEL'];
@@ -49,8 +49,14 @@ export async function callAPI(query: QueryObject): Promise<any[]> {
             });
         }
         
+        // Populate standard dimensions for context if not already present
+        if (!row.ad_name) row.ad_name = `Ad_Creative_${Math.floor(Math.random() * 100)}`;
+        if (!row.campaign_name) row.campaign_name = `Campaign_${['Alpha', 'Beta', 'Gamma'][Math.floor(Math.random()*3)]}`;
+        if (!row.adset_name) row.adset_name = `AdSet_${Math.floor(Math.random() * 10)}`;
+        if (!row.ad_status) row.ad_status = Math.random() > 0.1 ? 'ACTIVE' : 'INACTIVE';
+        
         // Ensure ad_id is present if requested (it usually is forced)
-        if (!row.ad_id && query.metrics?.includes('ad_id')) {
+        if (!row.ad_id) {
             row.ad_id = `ad_${Math.floor(Math.random() * 90000) + 10000}`;
         }
 

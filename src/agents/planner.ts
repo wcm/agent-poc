@@ -17,12 +17,13 @@ You MUST output a valid JSON object with the following structure:
   "tasks": [
     {
       "id": "1",
-      "description": "Detailed instruction for the sub-agent",
+      "description": "Concise instruction for the sub-agent",
       "assignedAgent": "reasoning" OR "data-query"
     },
     ...
   ]
 }
 
-Do not include any text outside the JSON block.`
+Do not include any text outside the JSON block.
+IMPORTANT: Use as few tasks as possible. Max 3 tasks.`
 });

@@ -13,6 +13,7 @@ export interface GlobalPlan {
 
 export interface GlobalContext {
     userInput: string;
+    conversationHistory: { role: string, content: string }[];
     plan: GlobalPlan | null;
     currentStepIndex: number;
     globalOutput: string[]; // Accumulate results from steps
