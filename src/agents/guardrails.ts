@@ -9,9 +9,9 @@ export interface GuardrailResult {
 }
 
 export class Guardrails {
-    
+
     static async validateInput(input: string, historyContext: string = ""): Promise<GuardrailResult> {
-        
+
         try {
             const client = new Anthropic({
                 apiKey: process.env.ANTHROPIC_API_KEY,
@@ -49,8 +49,10 @@ Return a JSON object ONLY:
             const contentBlock = response.content[0];
             if (contentBlock.type === 'text') {
                 try {
-                    const result = JSON.parse(contentBlock.text);
-                    
+                    // LLMs often wrap JSON in markdown code blocks, strip them
+                    const cleanJson = contentBlock.text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const result = JSON.parse(cleanJson);
+
                     if (!result.passed) {
                         let userReason = result.reason;
                         // Standardize error messages based on type for the user
@@ -63,19 +65,19 @@ Return a JSON object ONLY:
                         }
                         return { passed: false, reason: userReason };
                     }
-                    
+
                     return { passed: true };
                 } catch (e) {
                     // Fallback if JSON parsing fails, assuming passed if model didn't strictly reject
-                    console.error("Guardrail JSON parse error", e);
-                    return { passed: true }; 
+                    console.error("Guardrail JSON parse error", e, "Raw output:", contentBlock.text);
+                    return { passed: true };
                 }
             }
         } catch (error) {
             console.error("Guardrail check failed:", error);
             // If the check system fails, we fail safe (block) or fail open? 
             // For a prototype, let's allow it but log error to avoid blocking users if API hiccups.
-            return { passed: true }; 
+            return { passed: true };
         }
 
         return { passed: true };
