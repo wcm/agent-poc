@@ -64,7 +64,7 @@ app.post('/api/clear', (req: Request, res: Response) => {
 });
 
 // Anything that doesn't match the above, send back index.html
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
