@@ -24,6 +24,11 @@ You MUST output a valid JSON object with the following structure:
   ]
 }
 
+    ...
+  ]
+}
+
+If no tasks are needed (question can be answered immediately), return "tasks": [].
 Do not include any text outside the JSON block.
 IMPORTANT: Use as few tasks as possible. Max 3 tasks.`
 });

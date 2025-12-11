@@ -18,7 +18,8 @@ export class Orchestrator extends EventEmitter {
             conversationHistory: [],
             plan: null,
             currentStepIndex: 0,
-            globalOutput: []
+            globalOutput: [],
+            dataPool: []
         };
     }
 
@@ -31,7 +32,7 @@ export class Orchestrator extends EventEmitter {
     // Helper to get recent history for context (Sliding Window)
     private getRecentHistory(limit: number = 5): string {
         if (this.conversationHistory.length === 0) return "No previous conversation.";
-        
+
         const recent = this.conversationHistory.slice(-limit);
         return recent.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
     }
@@ -40,15 +41,15 @@ export class Orchestrator extends EventEmitter {
         console.log("[Orchestrator] Starting request handling...");
         this.context.userInput = userInput;
         // this.context.conversationHistory is not strictly needed by sub-agents if we pass it explicitly
-        
+
         try {
             // 1. Guardrail Check
             this.emit('progress', { agent: 'guardrails', title: 'Safety Check', content: 'Validating input safety and relevance...' });
-            
+
             // Pass recent history to guardrails for context-aware checks
-            const historyForGuardrail = this.getRecentHistory(4); 
+            const historyForGuardrail = this.getRecentHistory(4);
             const guardResult = await Guardrails.validateInput(userInput, historyForGuardrail);
-            
+
             if (!guardResult.passed) {
                 console.warn("[Orchestrator] Guardrail blocked request.");
                 // Throw an error with the specific reason to trigger the catch block
@@ -58,7 +59,7 @@ export class Orchestrator extends EventEmitter {
             // 2. Planning Phase
             console.log("[Orchestrator] Planning...");
             this.emit('progress', { agent: 'planner', title: 'Planning', content: 'Analyzing request and creating execution plan...' });
-            
+
             // Format input for planner with Sliding Window History
             const recentHistory = this.getRecentHistory(10); // 10 messages = 5 turns
             const plannerInput = `
@@ -74,7 +75,7 @@ ${userInput}
             } catch (e: any) {
                 throw new Error(`Planning failed: ${e.message}`);
             }
-            
+
             // Parse JSON
             try {
                 this.context.plan = JSON.parse(planJson);
@@ -92,10 +93,10 @@ ${userInput}
             }
 
             // Emit the plan to the UI
-            this.emit('progress', { 
-                agent: 'planner', 
-                title: 'Plan Generated', 
-                content: `Objective: ${this.context.plan.objective}\nTasks:\n${this.context.plan.tasks.map(t => `- ${t.description}`).join('\n')}` 
+            this.emit('progress', {
+                agent: 'planner',
+                title: 'Plan Generated',
+                content: `Objective: ${this.context.plan.objective}\nTasks:\n${this.context.plan.tasks.map(t => `- ${t.description}`).join('\n')}`
             });
 
             console.log(`[Orchestrator] Plan generated with ${this.context.plan.tasks.length} tasks.`);
@@ -107,40 +108,59 @@ ${userInput}
                 console.log(`[Orchestrator] Executing Step ${i + 1}: ${task.description} (${task.assignedAgent})`);
 
                 // Emit start of task
-                this.emit('progress', { 
-                    agent: task.assignedAgent, 
-                    title: `Executing Step ${i + 1}`, 
-                    content: `Task: ${task.description}` 
+                this.emit('progress', {
+                    agent: task.assignedAgent,
+                    title: `Executing Step ${i + 1}`,
+                    content: `Task: ${task.description}`
                 });
 
                 const taskInput = this.formatTaskInput(task);
                 let taskResult = "";
+                let newDataForPool: any[] | null = null; // Track new data for this step
 
                 try {
                     if (task.assignedAgent === 'reasoning') {
                         // Pass history to reasoning agent too
-                        const historyContext = this.getRecentHistory(6); 
+                        const historyContext = this.getRecentHistory(6);
                         const reasoningInput = `
 ${taskInput}
 
 CONVERSATION HISTORY:
 ${historyContext}
+
+AVAILABLE DATA POOL:
+${JSON.stringify(this.context.dataPool, null, 2)}
 `;
                         taskResult = await reasoningAgent.process(reasoningInput);
                     } else if (task.assignedAgent === 'data-query') {
-                        taskResult = await dataQueryAgent.process(taskInput);
+                        // Data Query returns a JSON string now with both summary and data
+                        const queryResultJson = await dataQueryAgent.process(taskInput);
+                        try {
+                            const parsedResult = JSON.parse(queryResultJson);
+                            // Store structured data in the dedicated pool
+                            if (parsedResult.structuredData && Array.isArray(parsedResult.structuredData)) {
+                                this.context.dataPool.push(...parsedResult.structuredData);
+                                newDataForPool = parsedResult.structuredData; // Capture for event
+                            }
+                            // The summary goes to the text output flow
+                            taskResult = parsedResult.summary;
+                        } catch (e) {
+                            // Fallback if parsing fails
+                            taskResult = queryResultJson;
+                        }
                     } else {
                         throw new Error(`Unknown agent assigned: ${task.assignedAgent}`);
                     }
                 } catch (e: any) {
-                    throw new Error(`Step ${i+1} (${task.assignedAgent}) failed: ${e.message}`);
+                    throw new Error(`Step ${i + 1} (${task.assignedAgent}) failed: ${e.message}`);
                 }
 
                 // Emit task result
-                this.emit('progress', { 
-                    agent: task.assignedAgent, 
-                    title: `Step ${i + 1} Complete`, 
-                    content: taskResult 
+                this.emit('progress', {
+                    agent: task.assignedAgent,
+                    title: `Step ${i + 1} Complete`,
+                    content: taskResult,
+                    dataPool: newDataForPool // Use the captured data variable
                 });
 
                 // Store result
@@ -152,7 +172,7 @@ ${historyContext}
             // 4. Final Response
             console.log("[Orchestrator] Generating final response...");
             this.emit('progress', { agent: 'final-responder', title: 'Synthesizing', content: 'Generating final answer...' });
-            
+
             const finalInput = `
 Original Objective: ${this.context.plan.objective}
 
@@ -160,6 +180,9 @@ Execution Results:
 ${this.context.globalOutput.join('\n\n')}
 
 Please summarize this into a final answer for the user.
+
+RETRIEVED DATA POOL:
+${JSON.stringify(this.context.dataPool, null, 2)}
 `;
             let finalAnswer;
             try {
@@ -176,11 +199,11 @@ Please summarize this into a final answer for the user.
 
         } catch (error: any) {
             console.error("[Orchestrator] Execution failed:", error);
-            
+
             // Delegate ALL errors to the Error Agent
             // The Error Agent will generate a polite, helpful response explaining what went wrong
             const errorResponse = await errorAgent.processError(userInput, error.message || "Unknown System Error");
-            
+
             return errorResponse;
         }
     }

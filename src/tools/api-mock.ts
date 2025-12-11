@@ -9,10 +9,10 @@ interface QueryObject {
 
 export async function callAPI(query: QueryObject): Promise<any[]> {
     console.log("[CallAPI] Generating mock data for query:", JSON.stringify(query));
-    
+
     const mockData = [];
     const count = 10;
-    
+
     // Helper to generate random value based on metric name
     const generateValue = (metric: string): number | string => {
         if (metric.includes('spend')) return parseFloat((Math.random() * 5000).toFixed(2));
@@ -28,18 +28,18 @@ export async function callAPI(query: QueryObject): Promise<any[]> {
 
     for (let i = 0; i < count; i++) {
         const row: any = {};
-        
+
         // Handle GroupBy - ensure the groupBy dimension is always included
         if (query.groupBy) {
-             if (query.groupBy === 'ad_format') {
-                 const formats = ['VIDEO', 'IMAGE', 'CAROUSEL'];
-                 row[query.groupBy] = formats[Math.floor(Math.random() * formats.length)];
-             } else if (query.groupBy === 'campaign_objective') {
-                 const objs = ['SALES', 'LEADS', 'TRAFFIC'];
-                 row[query.groupBy] = objs[Math.floor(Math.random() * objs.length)];
-             } else {
-                 row[query.groupBy] = `${query.groupBy}_${i + 1}`;
-             }
+            if (query.groupBy === 'ad_format') {
+                const formats = ['VIDEO', 'IMAGE', 'CAROUSEL'];
+                row[query.groupBy] = formats[Math.floor(Math.random() * formats.length)];
+            } else if (query.groupBy === 'campaign_objective') {
+                const objs = ['SALES', 'LEADS', 'TRAFFIC'];
+                row[query.groupBy] = objs[Math.floor(Math.random() * objs.length)];
+            } else {
+                row[query.groupBy] = `${query.groupBy}_${i + 1}`;
+            }
         }
 
         // Handle Metrics
@@ -48,17 +48,15 @@ export async function callAPI(query: QueryObject): Promise<any[]> {
                 row[metric] = generateValue(metric);
             });
         }
-        
+
         // Populate standard dimensions for context if not already present
         if (!row.ad_name) row.ad_name = `Ad_Creative_${Math.floor(Math.random() * 100)}`;
-        if (!row.campaign_name) row.campaign_name = `Campaign_${['Alpha', 'Beta', 'Gamma'][Math.floor(Math.random()*3)]}`;
+        if (!row.campaign_name) row.campaign_name = `Campaign_${['Alpha', 'Beta', 'Gamma'][Math.floor(Math.random() * 3)]}`;
         if (!row.adset_name) row.adset_name = `AdSet_${Math.floor(Math.random() * 10)}`;
         if (!row.ad_status) row.ad_status = Math.random() > 0.1 ? 'ACTIVE' : 'INACTIVE';
-        
-        // Ensure ad_id is present if requested (it usually is forced)
-        if (!row.ad_id) {
-            row.ad_id = `ad_${Math.floor(Math.random() * 90000) + 10000}`;
-        }
+
+        // Generate a unique Group Key for Details lookup
+        row.group_key = `${row.ad_id}_${i}`;
 
         mockData.push(row);
     }

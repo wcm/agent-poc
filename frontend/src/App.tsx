@@ -7,6 +7,7 @@ interface Message {
 	role: "user" | "assistant";
 	content: string;
 	steps?: StepUpdate[];
+	dataPool?: any[];
 }
 
 interface StepUpdate {
@@ -14,6 +15,7 @@ interface StepUpdate {
 	title: string;
 	content: string;
 	timestamp: number;
+	dataPool?: any[]; // Allow streaming raw data to frontend
 }
 
 // Separate component for the Agent Thinking Process
@@ -75,7 +77,9 @@ function App() {
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 
 	// Ref to track steps during streaming for the final message
+	// Ref to track steps during streaming for the final message
 	const stepsRef = useRef<StepUpdate[]>([]);
+	const dataPoolRef = useRef<any[]>([]);
 
 	const scrollToBottom = () => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -120,20 +124,28 @@ function App() {
 
 			if (data.type === "progress") {
 				const newStep = { ...data.data, timestamp: Date.now() };
+
 				// Update both State (for UI) and Ref (for final submission)
 				setCurrentProcessSteps((prev) => [...prev, newStep]);
 				stepsRef.current.push(newStep);
+				
+				// If this step contains new data, add it to our local pool
+				if (newStep.dataPool && Array.isArray(newStep.dataPool)) {
+					dataPoolRef.current.push(...newStep.dataPool);
+				}
 			} else if (data.type === "final") {
-				// Create message WITH the accumulated steps
+				// Create message WITH the accumulated steps AND dataPool
 				const assistantMessage: Message = {
 					role: "assistant",
 					content: data.response,
 					steps: [...stepsRef.current], // Attach steps here
+					dataPool: [...dataPoolRef.current], // Attach collected data here
 				};
 				setMessages((prev) => [...prev, assistantMessage]);
 				setIsLoading(false);
 				setCurrentProcessSteps([]); // Clear active steps as they are now in the message
 				stepsRef.current = [];
+				dataPoolRef.current = []; // Reset data pool
 				eventSource.close();
 			} else if (data.type === "error") {
 				setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error}` }]);
@@ -192,7 +204,7 @@ function App() {
 
 						<div className={`message ${msg.role}`}>
 							{/* Use the new MessageContent component for parsing buttons */}
-							<MessageContent content={msg.content} />
+							<MessageContent content={msg.content} dataPool={msg.dataPool} />
 						</div>
 					</React.Fragment>
 				))}

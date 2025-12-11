@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 
 interface MessageContentProps {
 	content: string;
+	dataPool?: any[]; // Allow passing in the data pool to look up details
 }
 
 // Helper to convert SNAKE_CASE to Title Case
@@ -15,24 +16,27 @@ const toTitleCase = (str: string) => {
 		.join(" ");
 };
 
-export const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
-	// Regex to match both ${{AD:ID}} and ${{PAGE:NAME}}
-	// This regex captures:
-	// 1. The text BEFORE the tag
-	// 2. The TYPE (AD or PAGE)
-	// 3. The VALUE (ID or NAME)
-	// We split by the entire tag to get parts
+export const MessageContent: React.FC<MessageContentProps> = ({ content, dataPool = [] }) => {
+	// Regex matches: ${{KEY:value}} OR ${{PAGE:value}}
+	const parts = content.split(/(\${{KEY:[^}]+}}|\${{PAGE:[^}]+}})/g);
 
-	const parts = content.split(/(\${{AD:[^}]+}}|\${{PAGE:[^}]+}})/g);
+	const handleDetailsClick = (key: string) => {
+		const data = dataPool.find((item) => item.group_key === key);
+		if (data) {
+			alert(`Details for ${key}:\n${JSON.stringify(data, null, 2)}`);
+		} else {
+			alert(`No details found for key: ${key}`);
+		}
+	};
 
 	return (
 		<div className="message-content">
 			{parts.map((part, index) => {
-				if (part.startsWith("${{AD:")) {
-					const adId = part.match(/\${{AD:([^}]+)}}/)?.[1];
+				if (part.startsWith("${{KEY:")) {
+					const key = part.match(/\${{KEY:([^}]+)}}/)?.[1];
 					return (
-						<button key={index} className="interactive-btn detail-btn" onClick={() => alert(`Clicked Ad: ${adId}`)}>
-							View Ad Details
+						<button key={index} className="interactive-btn detail-btn" onClick={() => key && handleDetailsClick(key)}>
+							View Details
 						</button>
 					);
 				} else if (part.startsWith("${{PAGE:")) {
@@ -44,10 +48,9 @@ export const MessageContent: React.FC<MessageContentProps> = ({ content }) => {
 					);
 				} else {
 					// Clean up bullets to standard markdown format before rendering
-					// Replace "•" with "-" and ensure proper spacing for lists
 					const cleanPart = part
-						.replace(/•/g, "-") // Replace bullets with dashes
-						.replace(/(\n)- /g, "\n- "); // Ensure newline before list items if missing
+						.replace(/•/g, "-") 
+						.replace(/(\n)- /g, "\n- "); 
 
 					return <ReactMarkdown key={index}>{cleanPart}</ReactMarkdown>;
 				}

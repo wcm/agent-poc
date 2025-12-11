@@ -20,13 +20,25 @@ class DataQueryAgentWrapper extends Agent {
             const data = await callAPI(queryObj);
 
             // 3. Return the Combined Output
-            return `QUERY GENERATED:
+            // 3. Return the Combined Output as JSON String
+            // We return a JSON string so the Orchestrator can parse it and split the data
+            const resultObject = {
+                summary: `QUERY GENERATED:
 ${JSON.stringify(queryObj, null, 2)}
 
-DATA RETRIEVED (Mock):
-${JSON.stringify(data, null, 2)}`;
+DATA RETRIEVED (Mock Summary):
+${JSON.stringify(data.slice(0, 3), null, 2)}
+... (${data.length} rows total)`,
+                structuredData: data
+            };
+
+            return JSON.stringify(resultObject);
+
         } catch (e: any) {
-            return `Error fetching data: ${e.message}`;
+            return JSON.stringify({
+                summary: `Error fetching data: ${e.message}`,
+                structuredData: []
+            });
         }
     }
 }

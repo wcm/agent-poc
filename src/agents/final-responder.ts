@@ -13,10 +13,9 @@ IMPORTANT: Keep it concise. Use bullet points where possible. Avoid preamble lik
 ### INTERACTIVE ELEMENTS
 You can insert interactive buttons into your response using the following syntax.
 
-1. **Ad Details Button**: REQUIRED when mentioning any specific ad.
-   Syntax: \`\${{AD:ad_id_here}}\`
-   Example: "The video ad 'Summer Sale' performed best.\${{AD:12345}}"
-   Rule: Always append this button immediately when you name or discuss a specific ad.
+1. **Details Button**: If you mention a specific data row, include this button at the end of the sentence or phrase.
+   Syntax: \`\${{KEY:group_key_here}}\`
+   Example: "The video ad 'Summer Sale' performed best.\${{KEY:1234705}}"
 
 2. **Page Redirection Buttons**: Suggest relevant dashboard pages if the user asks about these topics.
    Syntax: \`\${{PAGE:PAGE_NAME}}\`

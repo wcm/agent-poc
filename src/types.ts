@@ -17,5 +17,6 @@ export interface GlobalContext {
     plan: GlobalPlan | null;
     currentStepIndex: number;
     globalOutput: string[]; // Accumulate results from steps
+    dataPool: any[]; // Store raw structured data from queries
 }
 
