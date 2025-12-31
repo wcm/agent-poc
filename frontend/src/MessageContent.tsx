@@ -17,8 +17,8 @@ const toTitleCase = (str: string) => {
 };
 
 export const MessageContent: React.FC<MessageContentProps> = ({ content, dataPool = [] }) => {
-	// Regex matches: ${{KEY:value}} OR ${{PAGE:value}}
-	const parts = content.split(/(\${{KEY:[^}]+}}|\${{PAGE:[^}]+}})/g);
+	// Regex matches: [[KEY:value]] OR [[PAGE:value]]
+	const parts = content.split(/(\[\[KEY:[^\]]+\]\]|\[\[PAGE:[^\]]+\]\])/g);
 
 	const handleDetailsClick = (key: string) => {
 		const data = dataPool.find((item) => item.group_key === key);
@@ -32,15 +32,15 @@ export const MessageContent: React.FC<MessageContentProps> = ({ content, dataPoo
 	return (
 		<div className="message-content">
 			{parts.map((part, index) => {
-				if (part.startsWith("${{KEY:")) {
-					const key = part.match(/\${{KEY:([^}]+)}}/)?.[1];
+				if (part.startsWith("[[KEY:")) {
+					const key = part.match(/\[\[KEY:([^\]]+)\]\]/)?.[1];
 					return (
 						<button key={index} className="interactive-btn detail-btn" onClick={() => key && handleDetailsClick(key)}>
 							View Details
 						</button>
 					);
-				} else if (part.startsWith("${{PAGE:")) {
-					const pageName = part.match(/\${{PAGE:([^}]+)}}/)?.[1] || "";
+				} else if (part.startsWith("[[PAGE:")) {
+					const pageName = part.match(/\[\[PAGE:([^\]]+)\]\]/)?.[1] || "";
 					return (
 						<button key={index} className="interactive-btn page-button" onClick={() => alert(`Redirecting to: ${toTitleCase(pageName)}`)}>
 							Go to {toTitleCase(pageName)}

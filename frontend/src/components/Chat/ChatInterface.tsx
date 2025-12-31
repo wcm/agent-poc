@@ -91,7 +91,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <React.Fragment key={index}>
             {msg.steps && msg.steps.length > 0 && <AgentProcessDisplay steps={msg.steps} isComplete={true} />}
             <div className={`message ${msg.role}`}>
-              <MessageContent content={msg.content} dataPool={msg.dataPool} />
+              {msg.role === 'user' ? (
+                <div className="message-content">{msg.content}</div>
+              ) : (
+                <MessageContent content={msg.content} dataPool={msg.dataPool} />
+              )}
             </div>
           </React.Fragment>
         ))}

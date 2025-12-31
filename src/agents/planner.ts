@@ -2,7 +2,7 @@ import { Agent } from '../agent';
 
 export const plannerAgent = new Agent({
   name: "PlannerAgent",
-  model: "claude-sonnet-4-5",
+  model: "google/gemini-2.5-flash-lite",
   systemPrompt: `You are an expert Marketing Orchestrator.
 Your goal is to break down a user's request into a linear sequence of tasks. Use as few tasks as possible.
 

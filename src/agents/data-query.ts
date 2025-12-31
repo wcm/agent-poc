@@ -45,7 +45,7 @@ ${JSON.stringify(data.slice(0, 3), null, 2)}
 
 export const dataQueryAgent = new DataQueryAgentWrapper({
     name: "DataQueryAgent",
-    model: "claude-sonnet-4-5",
+    model: "google/gemini-2.5-flash-lite",
     systemPrompt: `You are a specialized Data Query Agent for a Marketing Analytics Platform.
 Your goal is to translate user requests into structured data queries based on a specific schema.
 

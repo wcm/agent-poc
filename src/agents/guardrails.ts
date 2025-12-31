@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+
+import { OpenRouter } from "@openrouter/sdk";
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,8 +14,8 @@ export class Guardrails {
     static async validateInput(input: string, historyContext: string = ""): Promise<GuardrailResult> {
 
         try {
-            const client = new Anthropic({
-                apiKey: process.env.ANTHROPIC_API_KEY,
+            const client = new OpenRouter({
+                apiKey: process.env.OPENROUTER_API_KEY,
             });
 
             const systemPrompt = `You are a strict Guardrail System for a Marketing Analytics AI.
@@ -40,23 +41,29 @@ Return a JSON object ONLY:
 }
 `;
 
-            const response = await client.messages.create({
-                model: "claude-sonnet-4-5",
-                max_tokens: 500,
-                system: systemPrompt,
-                messages: [{ role: "user", content: input }]
+            const response: any = await client.chat.send({
+                model: "google/gemini-2.5-flash-lite",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: input }
+                ],
+                max_tokens: 500
+            } as any, {
+                headers: {
+                    "HTTP-Referer": "https://localhost:3000",
+                    "X-Title": "Atria Agent POC",
+                }
             });
 
-            const contentBlock = response.content[0];
-            if (contentBlock.type === 'text') {
+            const output = response.choices?.[0]?.message?.content || response.content || "";
+
+            if (output) {
                 try {
-                    // LLMs often wrap JSON in markdown code blocks, strip them
-                    const cleanJson = contentBlock.text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const cleanJson = output.replace(/```json/g, '').replace(/```/g, '').trim();
                     const result = JSON.parse(cleanJson);
 
                     if (!result.passed) {
                         let userReason = result.reason;
-                        // Standardize error messages based on type for the user
                         if (result.violationType === 'SAFETY') {
                             userReason = "Request rejected due to safety policy.";
                         } else if (result.violationType === 'PII') {
@@ -69,15 +76,12 @@ Return a JSON object ONLY:
 
                     return { passed: true };
                 } catch (e) {
-                    // Fallback if JSON parsing fails, assuming passed if model didn't strictly reject
-                    console.error("Guardrail JSON parse error", e, "Raw output:", contentBlock.text);
+                    console.error("Guardrail JSON parse error", e, "Raw output:", output);
                     return { passed: true };
                 }
             }
         } catch (error) {
             console.error("Guardrail check failed:", error);
-            // If the check system fails, we fail safe (block) or fail open? 
-            // For a prototype, let's allow it but log error to avoid blocking users if API hiccups.
             return { passed: true };
         }
 

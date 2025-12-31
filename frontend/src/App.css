@@ -127,15 +127,12 @@ body {
 /* Brand Selector */
 .brand-selector-container {
   width: 100%;
-  padding: 0 12px;
+  padding: 0 8px;
+  /* Constant 8px padding */
   position: relative;
   /* For dropdown positioning */
-}
-
-.brand-selector-container.collapsed {
-  padding: 0;
-  display: flex;
-  justify-content: center;
+  box-sizing: border-box;
+  /* Ensure padding doesn't add to width if not already reset */
 }
 
 .brand-selector-header {
@@ -144,14 +141,12 @@ body {
   gap: 10px;
   cursor: pointer;
   padding: 8px;
+  /* Constant 8px padding */
   border-radius: 6px;
   transition: background 0.2s;
-}
-
-.brand-selector-container.collapsed .brand-selector-header {
-  padding: 8px 0;
-  justify-content: center;
-  width: 40px;
+  width: 100%;
+  /* Fill container */
+  box-sizing: border-box;
 }
 
 .brand-selector-header:hover {
@@ -251,7 +246,12 @@ body {
   border: none;
   color: #475569;
   cursor: pointer;
-  padding: 6px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 4px;
   z-index: 50;
   transition: all 0.2s;
@@ -548,9 +548,8 @@ body {
 }
 
 .message.user .message-content {
-  background: #fff5ec;
-  /* Light orange tint */
-  color: #334155;
+  background: var(--brand-color);
+  color: white;
   border-bottom-right-radius: 2px;
 }
 
@@ -568,7 +567,6 @@ body {
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  overflow: hidden;
 }
 
 .process-header {
