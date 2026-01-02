@@ -1,0 +1,68 @@
+[
+    {
+        "id": "ad_101",
+        "brand_name": "Starbucks",
+        "brand_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png",
+        "image_url": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80",
+        "headline": "Morning bliss in every cup",
+        "primary_text": "Start your day with the perfect brew. Our new Cold Brew blend is smooth, rich, and ready to go.",
+        "cta": "Order Now",
+        "engagement_score": 98,
+        "platform": "instagram"
+    },
+    {
+        "id": "ad_102",
+        "brand_name": "Nike",
+        "brand_logo": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Logo_NIKE.svg",
+        "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80",
+        "headline": "Run further than ever",
+        "primary_text": "The new ZoomX Invincible Run is designed to keep you on the road longer. Experience maximum cushioning.",
+        "cta": "Shop Now",
+        "engagement_score": 95,
+        "platform": "facebook"
+    },
+    {
+        "id": "ad_103",
+        "brand_name": "Spotify",
+        "brand_logo": "https://upload.wikimedia.org/wikipedia/commons/1/19/Spotify_logo_without_text.svg",
+        "image_url": "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?auto=format&fit=crop&w=800&q=80",
+        "headline": "Music for every mood",
+        "primary_text": "Discover new music, podcasts, and more with Spotify Premium. 3 months free.",
+        "cta": "Sign Up",
+        "engagement_score": 92,
+        "platform": "instagram"
+    },
+    {
+        "id": "ad_104",
+        "brand_name": "Airbnb",
+        "brand_logo": "https://upload.wikimedia.org/wikipedia/commons/6/69/Airbnb_Logo_B%C3%A9lo.svg",
+        "image_url": "https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&w=800&q=80",
+        "headline": "Live there, even for a night",
+        "primary_text": "Find unique homes and experiences all over the world. Book your next getaway today.",
+        "cta": "Book Now",
+        "engagement_score": 89,
+        "platform": "facebook"
+    },
+    {
+        "id": "ad_105",
+        "brand_name": "Tesla",
+        "brand_logo": "https://upload.wikimedia.org/wikipedia/commons/e/e8/Tesla_logo.png",
+        "image_url": "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=800&q=80",
+        "headline": "Drive the future",
+        "primary_text": "Model 3 is designed for electric-powered performance, with quick acceleration, long range and fast charging.",
+        "cta": "Order Model 3",
+        "engagement_score": 97,
+        "platform": "twitter"
+    },
+    {
+        "id": "ad_106",
+        "brand_name": "Apple",
+        "brand_logo": "https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg",
+        "image_url": "https://images.unsplash.com/photo-1621768216002-5ac171876625?auto=format&fit=crop&w=800&q=80",
+        "headline": "Pro cameras. Pro display. Pro performance.",
+        "primary_text": "iPhone 15 Pro. Titanium. A17 Pro chip. The most powerful iPhone ever.",
+        "cta": "Learn More",
+        "engagement_score": 99,
+        "platform": "instagram"
+    }
+]

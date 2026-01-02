@@ -63,6 +63,17 @@ app.post('/api/clear', (req: Request, res: Response) => {
     res.json({ message: 'History cleared' });
 });
 
+// Serve Discovery Data
+app.get('/api/inspirations/discovery', (req: Request, res: Response) => {
+    try {
+        // Use process.cwd() because we run via ts-node from project root
+        const dataPath = path.join(process.cwd(), 'src', 'data', 'discovery.json');
+        res.sendFile(dataPath);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to load discovery data' });
+    }
+});
+
 // Anything that doesn't match the above, send back index.html
 app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/build/index.html'));

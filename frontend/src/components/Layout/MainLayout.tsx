@@ -3,6 +3,7 @@ import Sidebar from '../Sidebar/Sidebar';
 import ChatInterface from '../Chat/ChatInterface';
 import { Message, Session, StepUpdate } from '../../types';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import DiscoveryFeed from '../Discovery/DiscoveryFeed';
 
 const MainLayout: React.FC = () => {
     // Layout State
@@ -10,6 +11,9 @@ const MainLayout: React.FC = () => {
     const [activeBrand, setActiveBrand] = useState('Starbucks');
     const [isCollapsed, setIsCollapsed] = useState(false);
     
+    // Inspirations State
+    const [activeInspirationTab, setActiveInspirationTab] = useState('discovery');
+
     // Session State
     const [sessions, setSessions] = useState<Session[]>([]);
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -151,6 +155,8 @@ const MainLayout: React.FC = () => {
                 onSessionSelect={handleSessionSelect}
                 onNewSession={handleNewSession}
                 isCollapsed={isCollapsed}
+                activeInspirationTab={activeInspirationTab}
+                onInspirationTabChange={setActiveInspirationTab}
             />
             <div className="main-content">
                 <button 
@@ -168,6 +174,15 @@ const MainLayout: React.FC = () => {
                         currentProcessSteps={currentProcessSteps}
                         onSendMessage={handleSendMessage}
                      />
+                ) : activeTab === 'inspirations' ? (
+                    activeInspirationTab === 'discovery' ? (
+                        <DiscoveryFeed />
+                    ) : (
+                        <div className="placeholder-content">
+                            <h1>Inspirations: {activeInspirationTab.replace('_', ' ').charAt(0).toUpperCase() + activeInspirationTab.replace('_', ' ').slice(1)}</h1>
+                            <p>This module is under construction.</p>
+                        </div>
+                    )
                 ) : (
                     <div className="placeholder-content">
                         <h1>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1>

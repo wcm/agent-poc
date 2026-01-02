@@ -6,7 +6,10 @@ import {
   Folder, 
   Rocket, 
   PlusSquare, 
-  User
+  User,
+  Globe,
+  Heart,
+  Bookmark
 } from 'lucide-react';
 import BrandSelector from './BrandSelector';
 import { Session } from '../../types';
@@ -21,6 +24,8 @@ interface SidebarProps {
   onSessionSelect: (id: string) => void;
   onNewSession: () => void;
   isCollapsed: boolean;
+  activeInspirationTab?: string;
+  onInspirationTabChange?: (tab: string) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -32,7 +37,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   activeSessionId,
   onSessionSelect,
   onNewSession,
-  isCollapsed
+  isCollapsed,
+  activeInspirationTab,
+  onInspirationTabChange
 }) => {
   
   const navItems = [
@@ -110,8 +117,37 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                     </>
                 )}
+
+                {activeTab === 'inspirations' && (
+                    <>
+                        {/* Removed "Explore" label as requested */}
+                        <div className="session-list" style={{ marginTop: '10px' }}>
+                            <div 
+                                className={`session-item ${activeInspirationTab === 'discovery' ? 'active' : ''}`}
+                                onClick={() => onInspirationTabChange?.('discovery')}
+                            >
+                                <Globe size={16} />
+                                Discovery
+                            </div>
+                            <div 
+                                className={`session-item ${activeInspirationTab === 'following_brands' ? 'active' : ''}`}
+                                onClick={() => onInspirationTabChange?.('following_brands')}
+                            >
+                                <Heart size={16} />
+                                Following Brands
+                            </div>
+                            <div 
+                                className={`session-item ${activeInspirationTab === 'saved_ads' ? 'active' : ''}`}
+                                onClick={() => onInspirationTabChange?.('saved_ads')}
+                            >
+                                <Bookmark size={16} />
+                                Saved Ads
+                            </div>
+                        </div>
+                    </>
+                )}
                 
-                {activeTab !== 'atria' && (
+                {activeTab !== 'atria' && activeTab !== 'inspirations' && (
                     <div className="coming-soon">
                         Nothing here yet.
                     </div>
