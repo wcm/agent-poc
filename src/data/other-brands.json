@@ -1,0 +1,30 @@
+[
+    {
+        "id": "brand_2",
+        "name": "Adidas",
+        "logo": "https://cdn-icons-png.flaticon.com/256/731/731962.png",
+        "category": "Athletic Footwear & Apparel",
+        "description": "Adidas AG is a German multinational corporation that designs and manufactures shoes, clothing and accessories.",
+        "website": "https://www.adidas.com",
+        "is_followed": true
+    },
+    {
+        "id": "brand_3",
+        "name": "On Running",
+        "logo": "https://pbs.twimg.com/profile_images/628800995556896769/SScgbUQc_400x400.jpg",
+        "category": "Performance Running",
+        "description": "On is a Swiss company that develops and markets sports products including footwear and apparel for running.",
+        "website": "https://www.on-running.com",
+        "is_followed": true
+    },
+    {
+        "id": "brand_4",
+        "name": "Lululemon",
+        "logo": "https://static-jobs.gaijinpot.com/logo/45291/13759.thumbnail.png",
+        "category": "Athletic Apparel",
+        "description": "Lululemon Athletica Inc. is a Canadian-American multinational athletic apparel retailer known for yoga pants and athletic wear.",
+        "website": "https://www.lululemon.com",
+        "is_followed": false
+    }
+]
+
