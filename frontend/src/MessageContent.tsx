@@ -1,5 +1,6 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface MessageContentProps {
 	content: string;
@@ -52,7 +53,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({ content, dataPoo
 						.replace(/•/g, "-") 
 						.replace(/(\n)- /g, "\n- "); 
 
-					return <ReactMarkdown key={index}>{cleanPart}</ReactMarkdown>;
+					return <ReactMarkdown key={index} remarkPlugins={[remarkGfm]}>{cleanPart}</ReactMarkdown>;
 				}
 			})}
 		</div>

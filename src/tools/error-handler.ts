@@ -1,8 +1,8 @@
-import { Agent } from '../agent';
+import { Tool } from '../tool-base';
 
-export const errorAgent = new Agent({
+export const errorHandlerTool = new Tool({
     name: "ErrorHandler",
-    model: "claude-sonnet-4-5", // Using Sonnet 4.5 as requested
+    model: "claude-sonnet-4-5",
     systemPrompt: `You are a polite and helpful customer support agent for a Marketing Data Analysis platform.
 Your job is to explain to the user why their request was rejected and suggest valid alternatives.
 

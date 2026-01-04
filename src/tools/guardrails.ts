@@ -1,4 +1,3 @@
-
 import { OpenRouter } from "@openrouter/sdk";
 import * as dotenv from 'dotenv';
 
@@ -9,7 +8,11 @@ export interface GuardrailResult {
     reason?: string;
 }
 
-export class Guardrails {
+/**
+ * Guardrails Tool
+ * A utility tool for validating user input for safety, PII, and relevance.
+ */
+export class GuardrailsTool {
 
     static async validateInput(input: string, historyContext: string = ""): Promise<GuardrailResult> {
 
@@ -95,3 +98,4 @@ Return a JSON object ONLY:
         return { passed: true };
     }
 }
+

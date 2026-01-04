@@ -3,7 +3,7 @@ import path from 'path';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
-import { Orchestrator } from './orchestrator';
+import { ConversationOrchestrator } from './conversation-orchestrator';
 
 dotenv.config();
 
@@ -16,8 +16,8 @@ app.use(express.json());
 // Serve static files from the React frontend app
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// Store orchestrator instance to maintain state across requests
-let globalOrchestrator: Orchestrator | null = null;
+// Store the Conversation Orchestrator instance to maintain state across requests
+let orchestrator: ConversationOrchestrator | null = null;
 
 // Helper to read/write data
 const DATA_DIR = path.join(process.cwd(), 'src', 'data');
@@ -39,40 +39,41 @@ app.get('/api/stream', async (req: Request, res: Response) => {
     res.flushHeaders();
 
     const message = req.query.message as string;
+    const channelId = (req.query.channelId as string) || 'channel_1';
+
     if (!message) {
-        res.write(`data: ${JSON.stringify({ error: "Message required" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: "Message required" })}\n\n`);
         res.end();
         return;
     }
 
-    // Initialize or reuse the global orchestrator to keep history
-    if (!globalOrchestrator) {
-        globalOrchestrator = new Orchestrator();
+    // Initialize or reuse the Conversation Orchestrator to keep history
+    if (!orchestrator) {
+        orchestrator = new ConversationOrchestrator();
     }
 
-    // Listen for progress events from the orchestrator
-    // We need to bind a new listener for THIS response, and remove it later
-    const onProgress = (data: any) => {
-        res.write(`data: ${JSON.stringify({ type: 'progress', data })}\n\n`);
+    // Listen for stream events from the orchestrator and forward them to the client
+    const onStream = (event: any) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
-    globalOrchestrator.on('progress', onProgress);
+    orchestrator.on('stream', onStream);
 
     try {
-        const response = await globalOrchestrator.handleRequest(message);
-        // Send final response
-        res.write(`data: ${JSON.stringify({ type: 'final', response })}\n\n`);
+        // handleRequest now streams events and returns void
+        await orchestrator.handleRequest(message, channelId);
     } catch (error: any) {
-        res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     } finally {
-        // Clean up listener to avoid leaks or duplicate messages on future requests
-        globalOrchestrator.off('progress', onProgress);
+        // Clean up listener to avoid leaks
+        orchestrator.off('stream', onStream);
         res.end();
     }
 });
 
 app.post('/api/clear', (req: Request, res: Response) => {
-    if (globalOrchestrator) {
-        globalOrchestrator.clearHistory();
+    if (orchestrator) {
+        orchestrator.clearHistory();
     }
     res.json({ message: 'History cleared' });
 });

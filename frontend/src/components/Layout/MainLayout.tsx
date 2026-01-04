@@ -1,11 +1,21 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import Sidebar, { Channel } from "../Sidebar/Sidebar";
 import ChatInterface from "../Chat/ChatInterface";
-import { Message, Session, StepUpdate } from "../../types";
+import { Message, Session, SessionContext, StreamedSection, PlanTask, SSEEvent, PlanEvent, PlanStatusEvent } from "../../types";
 import DiscoveryFeed from "../Discovery/DiscoveryFeed";
 import FollowingBrands from "../Discovery/FollowingBrands";
 import BrandDetails from "../Discovery/BrandDetails";
 import AnalyticsDashboard from "../Analytics/AnalyticsDashboard";
+
+// Default empty session context
+const createEmptyContext = (): SessionContext => ({
+	performanceReports: [],
+	focusedItems: [],
+	selectedItemIds: [],
+	creativeReports: [],
+	commonFindingsReport: null,
+	agentHistory: [],
+});
 
 const MainLayout: React.FC = () => {
 	// Layout State
@@ -27,11 +37,14 @@ const MainLayout: React.FC = () => {
 
 	// Chat State (Active Session)
 	const [isLoading, setIsLoading] = useState(false);
-	const [currentProcessSteps, setCurrentProcessSteps] = useState<StepUpdate[]>([]);
 
-	// Refs for streaming
-	const stepsRef = useRef<StepUpdate[]>([]);
-	const dataPoolRef = useRef<any[]>([]);
+	// Streaming State
+	const [streamingSections, setStreamingSections] = useState<StreamedSection[]>([]);
+	const [planStates, setPlanStates] = useState<Map<string, PlanTask[]>>(new Map());
+
+	// Refs for streaming accumulation
+	const sectionsRef = useRef<StreamedSection[]>([]);
+	const planStatesRef = useRef<Map<string, PlanTask[]>>(new Map());
 
 	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3001" : "";
 
@@ -39,13 +52,11 @@ const MainLayout: React.FC = () => {
 	useEffect(() => {
 		fetch(`${baseUrl}/api/clear`, { method: "POST" }).catch((err) => console.error("Failed to clear history:", err));
 
-		// Fetch channels for analytics
 		fetch(`${baseUrl}/api/own-analytics`)
 			.then((res) => res.json())
 			.then((data) => {
 				if (data.channels) {
 					setChannels(data.channels);
-					// Set first connected channel as default
 					const firstConnected = data.channels.find((c: Channel) => c.is_connected);
 					if (firstConnected) {
 						setActiveChannelId(firstConnected.id);
@@ -65,7 +76,7 @@ const MainLayout: React.FC = () => {
 
 	const handleInspirationTabChange = (tab: string) => {
 		setActiveInspirationTab(tab);
-		setBrandDetailId(null); // Clear detail view when switching tabs
+		setBrandDetailId(null);
 	};
 
 	const handleNavigateToBrand = (brandId: string) => {
@@ -93,6 +104,146 @@ const MainLayout: React.FC = () => {
 
 	const activeSession = sessions.find((s) => s.id === activeSessionId);
 	const currentMessages = activeSession ? activeSession.messages : [];
+	// Session context is available for future use (e.g., manual item selection)
+	// const currentContext = activeSession?.context || createEmptyContext();
+
+	/**
+	 * Handle incoming SSE events during streaming
+	 */
+	const handleSSEEvent = useCallback((event: SSEEvent, currentSessionId: string) => {
+		switch (event.type) {
+			case "text": {
+				const section: StreamedSection = { type: "text", content: event.content };
+				sectionsRef.current.push(section);
+				setStreamingSections([...sectionsRef.current]);
+				break;
+			}
+
+			case "plan": {
+				const planEvent = event as PlanEvent;
+				const section: StreamedSection = {
+					type: "plan",
+					planId: planEvent.planId,
+					agentName: planEvent.agentName,
+					title: planEvent.title,
+					tasks: planEvent.tasks,
+				};
+				sectionsRef.current.push(section);
+
+				// Store initial plan state
+				planStatesRef.current.set(planEvent.planId, [...planEvent.tasks]);
+
+				setStreamingSections([...sectionsRef.current]);
+				setPlanStates(new Map(planStatesRef.current));
+				break;
+			}
+
+			case "plan_status": {
+				const statusEvent = event as PlanStatusEvent;
+				const currentTasks = planStatesRef.current.get(statusEvent.planId);
+
+				if (currentTasks) {
+					const updatedTasks = currentTasks.map((task) => (task.id === statusEvent.taskId ? { ...task, status: statusEvent.status } : task));
+					planStatesRef.current.set(statusEvent.planId, updatedTasks);
+
+					// Also update the tasks in the section so they persist in the final message
+					sectionsRef.current = sectionsRef.current.map((section) => {
+						if (section.type === "plan" && section.planId === statusEvent.planId) {
+							return { ...section, tasks: updatedTasks };
+						}
+						return section;
+					});
+
+					setPlanStates(new Map(planStatesRef.current));
+					setStreamingSections([...sectionsRef.current]);
+				}
+				break;
+			}
+
+			case "report": {
+				const section: StreamedSection = {
+					type: "report",
+					reportType: event.reportType,
+					reportId: event.reportId,
+					title: event.title,
+					content: event.content,
+					itemId: event.itemId,
+					itemName: event.itemName,
+				};
+				sectionsRef.current.push(section);
+				setStreamingSections([...sectionsRef.current]);
+				break;
+			}
+
+			case "focused_items": {
+				const section: StreamedSection = {
+					type: "focused_items",
+					items: event.items,
+				};
+				sectionsRef.current.push(section);
+				setStreamingSections([...sectionsRef.current]);
+				break;
+			}
+
+			case "context_update": {
+				// Update session context
+				setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id === currentSessionId) {
+							return {
+								...s,
+								context: { ...s.context, ...event.context },
+							};
+						}
+						return s;
+					})
+				);
+				break;
+			}
+
+			case "done": {
+				// Finalize the message
+				const finalSections = [...sectionsRef.current];
+				const plainContent = finalSections
+					.filter((s) => s.type === "text")
+					.map((s) => (s.type === "text" ? s.content : ""))
+					.join("\n\n");
+
+				const assistantMessage: Message = {
+					role: "assistant",
+					content: plainContent || "Analysis complete.",
+					sections: finalSections,
+				};
+
+				setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id === currentSessionId) {
+							return { ...s, messages: [...s.messages, assistantMessage] };
+						}
+						return s;
+					})
+				);
+
+				// Clear streaming state
+				setIsLoading(false);
+				setStreamingSections([]);
+				setPlanStates(new Map());
+				sectionsRef.current = [];
+				planStatesRef.current = new Map();
+				break;
+			}
+
+			case "error": {
+				const errorSection: StreamedSection = {
+					type: "text",
+					content: `⚠️ Error: ${event.message}`,
+				};
+				sectionsRef.current.push(errorSection);
+				setStreamingSections([...sectionsRef.current]);
+				break;
+			}
+		}
+	}, []);
 
 	const handleSendMessage = async (content: string) => {
 		// 1. Prepare User Message
@@ -103,18 +254,18 @@ const MainLayout: React.FC = () => {
 		let newSessions = [...sessions];
 
 		if (!currentSessionId) {
-			currentSessionId = Date.now().toString(); // Simple ID generation
+			currentSessionId = Date.now().toString();
 			const newSession: Session = {
 				id: currentSessionId,
-				title: content.length > 30 ? content.substring(0, 30) + "..." : content, // Title is first prompt
+				title: content.length > 30 ? content.substring(0, 30) + "..." : content,
 				messages: [userMessage],
 				createdAt: Date.now(),
+				context: createEmptyContext(),
 			};
 			newSessions.push(newSession);
 			setSessions(newSessions);
 			setActiveSessionId(currentSessionId);
 		} else {
-			// Add to existing session
 			setSessions((prev) =>
 				prev.map((s) => {
 					if (s.id === currentSessionId) {
@@ -125,65 +276,31 @@ const MainLayout: React.FC = () => {
 			);
 		}
 
+		// 3. Reset streaming state
 		setIsLoading(true);
-		setCurrentProcessSteps([]);
-		stepsRef.current = [];
-		dataPoolRef.current = [];
+		setStreamingSections([]);
+		setPlanStates(new Map());
+		sectionsRef.current = [];
+		planStatesRef.current = new Map();
 
-		// 3. Start Streaming
-		const apiUrl = window.location.hostname === "localhost" ? `http://localhost:3001/api/stream?message=${encodeURIComponent(content)}` : `/api/stream?message=${encodeURIComponent(content)}`;
+		// 4. Start SSE streaming
+		const channelParam = activeChannelId ? `&channelId=${encodeURIComponent(activeChannelId)}` : "";
+		const apiUrl = `${baseUrl}/api/stream?message=${encodeURIComponent(content)}${channelParam}`;
 
 		const eventSource = new EventSource(apiUrl);
+		const sessionId = currentSessionId; // Capture for closure
 
 		eventSource.onmessage = (event) => {
-			const data = JSON.parse(event.data);
+			try {
+				const data = JSON.parse(event.data) as SSEEvent;
+				handleSSEEvent(data, sessionId);
 
-			if (data.type === "progress") {
-				const newStep = { ...data.data, timestamp: Date.now() };
-
-				setCurrentProcessSteps((prev) => [...prev, newStep]);
-				stepsRef.current.push(newStep);
-
-				if (newStep.dataPool && Array.isArray(newStep.dataPool)) {
-					dataPoolRef.current.push(...newStep.dataPool);
+				// Close EventSource on done
+				if (data.type === "done") {
+					eventSource.close();
 				}
-			} else if (data.type === "final") {
-				const assistantMessage: Message = {
-					role: "assistant",
-					content: data.response,
-					steps: [...stepsRef.current],
-					dataPool: [...dataPoolRef.current],
-				};
-
-				// Add Assistant Message to Session
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id === currentSessionId) {
-							return { ...s, messages: [...s.messages, assistantMessage] };
-						}
-						return s;
-					})
-				);
-
-				setIsLoading(false);
-				setCurrentProcessSteps([]);
-				stepsRef.current = [];
-				dataPoolRef.current = [];
-				eventSource.close();
-			} else if (data.type === "error") {
-				const errorMessage: Message = { role: "assistant", content: `Error: ${data.error}` };
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id === currentSessionId) {
-							return { ...s, messages: [...s.messages, errorMessage] };
-						}
-						return s;
-					})
-				);
-				setIsLoading(false);
-				setCurrentProcessSteps([]);
-				stepsRef.current = [];
-				eventSource.close();
+			} catch (err) {
+				console.error("Failed to parse SSE event:", err);
 			}
 		};
 
@@ -191,6 +308,10 @@ const MainLayout: React.FC = () => {
 			console.error("EventSource failed:", err);
 			eventSource.close();
 			setIsLoading(false);
+			setStreamingSections([]);
+			setPlanStates(new Map());
+			sectionsRef.current = [];
+			planStatesRef.current = new Map();
 		};
 	};
 
@@ -217,7 +338,7 @@ const MainLayout: React.FC = () => {
 			/>
 			<div className="main-content">
 				{activeTab === "atria" ? (
-					<ChatInterface messages={currentMessages} isLoading={isLoading} currentProcessSteps={currentProcessSteps} onSendMessage={handleSendMessage} />
+					<ChatInterface messages={currentMessages} isLoading={isLoading} streamingSections={streamingSections} planStates={planStates} onSendMessage={handleSendMessage} />
 				) : activeTab === "inspirations" ? (
 					brandDetailId ? (
 						<BrandDetails brandId={brandDetailId} onBack={() => setBrandDetailId(null)} />

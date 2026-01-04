@@ -62,7 +62,7 @@ const BrandSelector: React.FC<BrandSelectorProps> = ({ activeBrand, onBrandChang
         {activeBrandData?.logo ? (
           <img src={activeBrandData.logo} alt={activeBrand} className="brand-logo-img" />
         ) : (
-          <div className="brand-logo-placeholder"></div>
+        <div className="brand-logo-placeholder"></div>
         )}
         {!isCollapsed && (
           <>
@@ -86,7 +86,7 @@ const BrandSelector: React.FC<BrandSelectorProps> = ({ activeBrand, onBrandChang
               {brand.logo ? (
                 <img src={brand.logo} alt={brand.name} className="brand-logo-small-img" />
               ) : (
-                <div className="brand-logo-small"></div>
+              <div className="brand-logo-small"></div>
               )}
               <span>{brand.name}</span>
             </div>

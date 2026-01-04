@@ -1,20 +1,22 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ArrowUp, Paperclip } from 'lucide-react';
-import { Message, StepUpdate } from '../../types';
-import AgentProcessDisplay from './AgentProcessDisplay';
+import { Message, StreamedSection, PlanTask } from '../../types';
+import StreamingMessage from './StreamingMessage';
 import { MessageContent } from '../../MessageContent';
 
 interface ChatInterfaceProps {
   messages: Message[];
   isLoading: boolean;
-  currentProcessSteps: StepUpdate[];
+    streamingSections: StreamedSection[];
+    planStates: Map<string, PlanTask[]>;
   onSendMessage: (message: string) => void;
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({
   messages,
   isLoading,
-  currentProcessSteps,
+    streamingSections,
+    planStates,
   onSendMessage
 }) => {
   const [input, setInput] = useState("");
@@ -26,7 +28,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, currentProcessSteps]);
+    }, [messages, streamingSections]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,20 +41,43 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     onSendMessage(text);
   };
 
+    const renderMessage = (msg: Message, index: number) => {
+        if (msg.role === 'user') {
+            return (
+                <div key={index} className="message user">
+                    <div className="message-content">{msg.content}</div>
+                </div>
+            );
+        }
+
+        // Assistant message with new streaming sections format
+        if (msg.sections && msg.sections.length > 0) {
+            return (
+                <div key={index} className="assistant-response">
+                    <StreamingMessage 
+                        sections={msg.sections} 
+                        planStates={new Map()} // Completed messages don't need plan state updates
+                    />
+                </div>
+            );
+        }
+
+        // Fallback to legacy format (plain text)
+        return (
+            <div key={index} className="message assistant">
+                <MessageContent content={msg.content} dataPool={undefined} />
+            </div>
+        );
+    };
+
   return (
     <div className="chat-interface">
-
       <div className="chat-messages-area">
-        {messages.length === 0 && (
+                {messages.length === 0 && !isLoading && (
           <div className="empty-state-container">
-             {/* Center branding could go here if in reference (Reference has 'Atria' big in center) */}
              <h2 className="center-brand">Atria</h2>
 
             <div className="suggested-questions-container">
-               {/* 
-                 Updated structure to match the reference image: 
-                 Grid of cards, maybe 2x2. 
-               */}
               <div className="cards-grid">
                 <button
                     className="suggested-card"
@@ -63,49 +88,54 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 </button>
                 <button
                     className="suggested-card"
-                    onClick={() => handleSuggestedClick("Clone competitor's top performing ads")}
+                                    onClick={() => handleSuggestedClick("Why is my top ad performing so well? Deep dive into the creative.")}
                 >
-                    <span className="card-title">Clone competitor's top performing ads</span>
+                                    <span className="card-title">Deep dive into top performers</span>
                     <span className="card-subtitle">Why are my best ads performing well?</span>
                 </button>
                 <button
                     className="suggested-card"
-                    onClick={() => handleSuggestedClick("Learn from my poor performing ads")}
+                                    onClick={() => handleSuggestedClick("What patterns do my top creatives have in common?")}
                 >
-                    <span className="card-title">Learn from my poor performing ads</span>
-                    <span className="card-subtitle">Which ads need more experimentation?</span>
+                                    <span className="card-title">Find creative patterns</span>
+                                    <span className="card-subtitle">What makes winning ads work?</span>
                 </button>
                  <button
                     className="suggested-card"
-                    onClick={() => handleSuggestedClick("Scale my winning ads to new products")}
+                                    onClick={() => handleSuggestedClick("Show me my video ad performance")}
                 >
-                    <span className="card-title">Scale my winning ads to new products</span>
-                    <span className="card-subtitle">What are the top 3 key actions to take?</span>
+                                    <span className="card-title">Video ad analysis</span>
+                                    <span className="card-subtitle">How are my video ads doing?</span>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {messages.map((msg, index) => (
-          <React.Fragment key={index}>
-            {msg.steps && msg.steps.length > 0 && <AgentProcessDisplay steps={msg.steps} isComplete={true} />}
-            <div className={`message ${msg.role}`}>
-              {msg.role === 'user' ? (
-                <div className="message-content">{msg.content}</div>
-              ) : (
-                <MessageContent content={msg.content} dataPool={msg.dataPool} />
-              )}
-            </div>
-          </React.Fragment>
-        ))}
+                {/* Render completed messages */}
+                {messages.map((msg, index) => renderMessage(msg, index))}
 
-        {isLoading && currentProcessSteps.length > 0 && <AgentProcessDisplay steps={currentProcessSteps} isComplete={false} />}
+                {/* Render streaming sections during loading */}
+                {isLoading && streamingSections.length > 0 && (
+                    <div className="assistant-response streaming">
+                        <StreamingMessage 
+                            sections={streamingSections} 
+                            planStates={planStates}
+                        />
+                    </div>
+                )}
+
+                {/* Loading indicator when no sections yet */}
+                {isLoading && streamingSections.length === 0 && (
+                    <div className="loading-indicator">
+                        <span className="loading-text">Thinking...</span>
+            </div>
+                )}
         
         <div ref={messagesEndRef} />
       </div>
 
-       {/* Floating Input Area as per reference image */}
+            {/* Floating Input Area */}
        <div className="chat-input-area">
           <div className="input-actions-bar">
              <button className="tag-btn">+ Ad Account</button>
