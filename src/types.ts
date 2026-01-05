@@ -1,4 +1,15 @@
 /**
+ * Channel Info - Analytics channel data
+ */
+export interface ChannelInfo {
+    id: string;
+    name: string;
+    platform: string;
+    account_id: string;
+    is_connected: boolean;
+}
+
+/**
  * SSE Event Types - Sent from server to frontend
  */
 
@@ -44,6 +55,18 @@ export interface ReportEvent {
     content: string;
     itemId?: string;      // For creative reports - which item this is for
     itemName?: string;    // For creative reports
+    itemData?: {          // For creative reports - ad thumbnail and metrics
+        thumbnail?: string;
+        displayFormat?: 'image' | 'video';
+        videoLength?: string;
+        metrics: {
+            roas?: number;
+            spend?: number;
+            ctr?: number;
+            impressions?: number;
+            cost_per_lead?: number;
+        };
+    };
 }
 
 // Focused items event - ad/creative cards

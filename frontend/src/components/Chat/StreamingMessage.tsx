@@ -53,6 +53,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planState
                                 title={section.title}
                                 content={section.content}
                                 itemName={section.itemName}
+                                itemData={section.itemData}
                             />
                         );
                     

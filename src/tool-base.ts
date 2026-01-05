@@ -1,6 +1,7 @@
 
 import { OpenRouter } from "@openrouter/sdk";
 import * as dotenv from 'dotenv';
+import { logger } from './utils/logger';
 
 dotenv.config();
 
@@ -25,7 +26,10 @@ export class Tool {
     }
 
     async process(input: string): Promise<string> {
-        console.log(`[Tool:${this.config.name}] Processing input...`);
+        const startTime = Date.now();
+        const toolName = `Tool:${this.config.name}`;
+        
+        logger.toolInput(toolName, input);
 
         this.history.push({ role: 'user', content: input });
 
@@ -44,22 +48,26 @@ export class Tool {
             const output = response.choices?.[0]?.message?.content || response.content || "";
 
             if (!output) {
-                console.log("Raw Response:", JSON.stringify(response));
+                logger.debug(toolName, 'Empty response received', { rawResponse: JSON.stringify(response).slice(0, 500) });
                 throw new Error('Empty response from OpenRouter/Model');
             }
 
             this.history.push({ role: 'assistant', content: output });
+            
+            const duration = Date.now() - startTime;
+            logger.toolOutput(toolName, output, duration);
 
             return output;
 
-        } catch (error) {
-            console.error(`[Tool:${this.config.name}] Error:`, error);
+        } catch (error: any) {
+            logger.toolError(toolName, error);
             throw error;
         }
     }
 
     async processError(failedInput: string, reason: string): Promise<string> {
         const context = `User Input: "${failedInput}"\nRejection Reason: "${reason}"`;
+        const toolName = `Tool:${this.config.name}`;
 
         try {
             const response: any = await this.client.chat.send({
@@ -71,10 +79,14 @@ export class Tool {
             });
 
             return response.choices?.[0]?.message?.content || response.content || "I apologize, but I cannot process your request at this time.";
-        } catch (e) {
-            console.error("Error Tool failed:", e);
+        } catch (e: any) {
+            logger.toolError(toolName, e);
             return `I apologize, but I cannot process your request because it violated our safety policies (${reason}).`;
         }
+    }
+
+    getName(): string {
+        return this.config.name;
     }
 
     getHistory() {

@@ -3,7 +3,8 @@ import { dataQueryTool } from './tools/data-query';
 import { finalResponderTool } from './tools/final-responder';
 import { Tool } from './tool-base';
 import { EventEmitter } from 'events';
-import { PlanTask, TaskStatus } from './types';
+import { PlanTask, TaskStatus, ChannelInfo } from './types';
+import { logger } from './utils/logger';
 
 /**
  * Result structure for Performance Analysis
@@ -37,7 +38,7 @@ type StatusCallback = (taskId: string, status: TaskStatus, result?: string) => v
  * PerformanceAnalysisAgent
  * 
  * Specialized agent for analyzing ad performance data.
- * Takes a channelId and objective, then:
+ * Takes channel info and objective, then:
  * 1. Plans internally which tasks to execute
  * 2. Executes the plan using DataQueryTool and ReasoningTool
  * 3. Returns a structured result with markdown report and focus items
@@ -45,6 +46,7 @@ type StatusCallback = (taskId: string, status: TaskStatus, result?: string) => v
 export class PerformanceAnalysisAgent extends EventEmitter {
     private dataPool: any[] = [];
     private executionResults: string[] = [];
+    private queryInfo: string = '';  // Track query parameters used
     private internalPlannerTool: Tool;
     private focusExtractorTool: Tool;
 
@@ -137,20 +139,21 @@ Return 3-5 items maximum.`
 
     /**
      * Main analysis method with streaming support
-     * @param channelId - The channel to analyze
+     * @param channel - The channel info to analyze
      * @param objective - What the user wants to analyze
      * @param onStatusUpdate - Callback for plan status updates
      */
     async analyzeWithStreaming(
-        channelId: string, 
+        channel: ChannelInfo, 
         objective: string,
         onStatusUpdate?: StatusCallback
     ): Promise<PerformanceAnalysisResult> {
-        console.log(`[PerformanceAgent] Starting analysis: channel=${channelId}, objective=${objective}`);
+        logger.debug('PerformanceAgent', 'Internal analysis starting', { channel: channel.name, objective });
         
         // Reset state
         this.dataPool = [];
         this.executionResults = [];
+        this.queryInfo = '';
 
         const updateStatus = onStatusUpdate || (() => {});
 
@@ -158,7 +161,7 @@ Return 3-5 items maximum.`
             // 1. Internal Planning
             updateStatus('plan', 'running');
             
-            const planInput = `Channel ID: ${channelId}\nObjective: ${objective}`;
+            const planInput = `Channel: ${channel.name} (${channel.platform})\nChannel ID: ${channel.id}\nObjective: ${objective}`;
             const planResponse = await this.internalPlannerTool.process(planInput);
             
             let plan: { tasks: AnalysisTask[] };
@@ -174,7 +177,7 @@ Return 3-5 items maximum.`
                 }
             }
 
-            console.log(`[PerformanceAgent] Plan created with ${plan.tasks.length} tasks`);
+            logger.plan('PerformanceAgent', plan.tasks.map(t => ({ id: t.id, description: t.description, tool: t.tool })));
             updateStatus('plan', 'completed', `${plan.tasks.length} tasks planned`);
 
             // 2. Execute Tasks
@@ -182,25 +185,68 @@ Return 3-5 items maximum.`
                 const task: AnalysisTask = plan.tasks[i];
                 const taskId = task.tool === 'data-query' ? 'query' : 'analyze';
                 
-                console.log(`[PerformanceAgent] Executing: ${task.description}`);
+                logger.taskStart('PerformanceAgent', task.id, task.description, task.tool);
                 updateStatus(taskId, 'running');
 
                 let result = "";
 
                 if (task.tool === 'data-query') {
                     const queryContext = `
-Channel ID: ${channelId}
+Channel: ${channel.name} (${channel.platform})
+Channel ID: ${channel.id}
 Objective: ${objective}
 Task: ${task.description}
 `;
+                    logger.debug('PerformanceAgent', 'Calling DataQueryTool', { queryContext: queryContext.slice(0, 200) });
                     const queryResultJson = await dataQueryTool.process(queryContext);
+                    
+                    logger.debug('PerformanceAgent', 'DataQueryTool raw response', { 
+                        responseLength: queryResultJson.length,
+                        responsePreview: queryResultJson.slice(0, 500)
+                    });
                     
                     try {
                         const parsedResult = JSON.parse(queryResultJson);
+                        
+                        logger.debug('PerformanceAgent', 'Parsed DataQuery result', {
+                            hasStructuredData: !!parsedResult.structuredData,
+                            structuredDataLength: parsedResult.structuredData?.length || 0,
+                            summaryPreview: parsedResult.summary?.slice(0, 200)
+                        });
+                        
                         if (parsedResult.structuredData && Array.isArray(parsedResult.structuredData)) {
-                            this.dataPool.push(...parsedResult.structuredData);
+                            // Clear and replace dataPool with fresh data
+                            this.dataPool = [...parsedResult.structuredData];
+                            
+                            logger.debug('PerformanceAgent', 'DataPool updated', {
+                                dataPoolLength: this.dataPool.length,
+                                firstItem: this.dataPool[0] ? {
+                                    id: this.dataPool[0].id || this.dataPool[0].ad_id,
+                                    name: this.dataPool[0].ad_name || this.dataPool[0].group_value,
+                                    metrics: this.dataPool[0].metrics
+                                } : null
+                            });
                         }
                         result = parsedResult.summary;
+                        
+                        // Extract and store query info for the final report
+                        if (result.includes('QUERY EXECUTED:')) {
+                            const queryMatch = result.match(/QUERY EXECUTED:\s*(\{[\s\S]*?\})\s*DATA RETRIEVED:/);
+                            if (queryMatch) {
+                                try {
+                                    const queryObj = JSON.parse(queryMatch[1]);
+                                    this.queryInfo = `
+**Data Query Parameters:**
+- Channel: ${queryObj.channel || 'all'}
+- Grouped By: ${queryObj.groupBy || 'ad_name'}
+- Filters: ${queryObj.filters?.display_format ? `Format=${queryObj.filters.display_format}` : ''} ${queryObj.filters?.status ? `Status=${queryObj.filters.status}` : ''} ${!queryObj.filters?.display_format && !queryObj.filters?.status ? 'None' : ''}
+- Sorted By: ${queryObj.sortBy || 'spend'} (${queryObj.sortOrder || 'desc'})
+- Results: ${this.dataPool.length} items`;
+                                } catch (e) {
+                                    // Ignore parse errors
+                                }
+                            }
+                        }
                     } catch (e) {
                         result = queryResultJson;
                     }
@@ -208,9 +254,19 @@ Task: ${task.description}
                     updateStatus(taskId, 'completed', `Fetched ${this.dataPool.length} items`);
                     
                 } else if (task.tool === 'reasoning') {
+                    logger.debug('PerformanceAgent', 'Preparing reasoning input', {
+                        dataPoolLength: this.dataPool.length,
+                        dataPoolFirstItems: this.dataPool.slice(0, 3).map(item => ({
+                            id: item.id || item.ad_id,
+                            name: item.ad_name || item.group_value,
+                            metrics: item.metrics
+                        })),
+                        previousResultsCount: this.executionResults.length
+                    });
+                    
                     const reasoningInput = `
 Objective: ${objective}
-Channel: ${channelId}
+Channel: ${channel.name} (${channel.platform})
 Task: ${task.description}
 
 Available Data (${this.dataPool.length} items):
@@ -222,6 +278,11 @@ ${this.executionResults.join('\n\n')}
 
 Provide analysis and insights.
 `;
+                    logger.debug('PerformanceAgent', 'Reasoning input prepared', { 
+                        inputLength: reasoningInput.length,
+                        inputPreview: reasoningInput.slice(0, 500)
+                    });
+                    
                     result = await reasoningTool.process(reasoningInput);
                     updateStatus(taskId, 'completed', 'Analysis complete');
                 }
@@ -234,18 +295,22 @@ Provide analysis and insights.
 
             const finalInput = `
 Objective: ${objective}
-Channel: ${channelId}
+Channel: ${channel.name} (${channel.platform})
 
-Execution Results:
+${this.queryInfo}
+
+Analysis Results:
 ${this.executionResults.join('\n\n')}
 
-Data Pool (${this.dataPool.length} items):
+Sample Data (${this.dataPool.length} total items):
 ${JSON.stringify(this.dataPool.slice(0, 5), null, 2)}
 
 Generate a clear, actionable markdown report. Include:
-1. Key findings
-2. Top recommendations
-3. Specific items to focus on (reference by name/ID)
+1. Brief methodology section (what data was queried)
+2. Key findings with supporting metrics
+3. Performance comparison table
+4. Top recommendations
+5. Specific items to focus on (reference by name/ID)
 `;
             const markdownReport = await finalResponderTool.process(finalInput);
             updateStatus('report', 'completed', 'Report generated');
@@ -269,8 +334,8 @@ Generate a clear, actionable markdown report. Include:
     /**
      * Legacy analyze method (for backwards compatibility)
      */
-    async analyze(channelId: string, objective: string): Promise<PerformanceAnalysisResult> {
-        return this.analyzeWithStreaming(channelId, objective);
+    async analyze(channel: ChannelInfo, objective: string): Promise<PerformanceAnalysisResult> {
+        return this.analyzeWithStreaming(channel, objective);
     }
 
     /**

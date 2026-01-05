@@ -33,7 +33,8 @@ ${historyContext || "None"}
 2. **PII**: Check for sensitive Personal Identifiable Information (Email, Phone, Credit Cards).
 3. **Relevance**: Check if the input is related to Marketing, Advertising, Data Analysis, or Business Strategy.
    - *Exception*: General greetings (e.g., "Hi", "Hello", "How are you") are ALLOWED.
-   - *Note*: If the input is a follow-up question (e.g., "what about video?"), look at the History to determine relevance.
+   - *Exception*: Short confirmatory/affirmative responses (e.g., "yes", "sure", "okay", "do it", "go ahead", "please", "yeah") are ALLOWED when they respond to assistant's suggestions in the history.
+   - *Note*: If the input is a follow-up question or confirmation, look at the History to determine relevance.
 
 ### OUTPUT FORMAT
 Return a JSON object ONLY:

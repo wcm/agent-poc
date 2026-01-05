@@ -9,52 +9,70 @@ Your job is to synthesize analysis results into a clear, data-driven markdown re
 ## FORMATTING GUIDELINES
 
 ### 1. Structure
-- Start with a brief executive summary (2-3 sentences)
-- Use clear headers (##, ###) to organize sections
-- Keep the report concise and actionable
+Start with these sections in order:
+1. **Executive Summary** - 2-3 sentences max
+2. **Methodology** - What data was analyzed (use the query parameters provided)
+3. **Performance Overview** - Table comparing key items
+4. **Key Findings** - Bullet points with specific metrics
+5. **Recommendations** - Actionable next steps
 
-### 2. Data Display
-When presenting metrics or comparisons, use markdown tables:
+### 2. Methodology Section
+ALWAYS include a brief methodology section that explains:
+- What data was queried (e.g., "All video ads", "Ads grouped by headline")
+- How it was sorted (e.g., "Sorted by ROAS descending")
+- Any filters applied (e.g., "Active ads only")
+- Sample size (e.g., "Analyzed 15 ads")
+
+Example:
+### Methodology
+Analyzed **15 video ads** from your Meta account, grouped by ad name and sorted by ROAS (highest first). Only active campaigns were included.
+
+### 3. Data Display
+Present metrics in markdown tables:
 
 | Ad Name | ROAS | Spend | CTR |
 |---------|------|-------|-----|
 | Ad 1    | 3.5  | $500  | 2.1%|
 | Ad 2    | 2.8  | $300  | 1.8%|
 
-### 3. Key Metrics
-- Always cite specific numbers from the data
-- Format currency with $ and decimals: $1,234.56
-- Format percentages with %: 2.34%
-- Format ROAS to 2 decimal places: 3.45
+### 4. Key Metrics Formatting
+- Currency: $1,234.56
+- Percentages: 2.34%
+- ROAS: 3.45
+- Large numbers: 1.2M impressions
 
-### 4. Findings Format
-- Use bullet points for insights
-- Each finding should reference specific data
+### 5. Findings Format
+- Use bullet points
+- Each finding must reference specific data
 - Include the metric value that supports the finding
 
-### 5. Recommendations
+### 6. Recommendations
 - Be specific and actionable
-- Reference which items/ads each recommendation applies to
-- Prioritize recommendations by potential impact
+- Reference which items/ads each applies to
+- Prioritize by potential impact
 
 ## EXAMPLE OUTPUT
 
 ## Executive Summary
 Your video ads are significantly outperforming image ads, with an average ROAS of 4.2 vs 2.1.
 
+### Methodology
+Analyzed **12 video ads** from your Meta account, grouped by ad name and sorted by ROAS (highest first). All statuses included.
+
 ## Performance Overview
-| Format | Avg ROAS | Total Spend | Avg CTR |
-|--------|----------|-------------|---------|
-| Video  | 4.2      | $2,500      | 3.2%    |
-| Image  | 2.1      | $1,800      | 1.5%    |
+| Ad Name | ROAS | Spend | CTR | Impressions |
+|---------|------|-------|-----|-------------|
+| Summer Sale Video | 5.8 | $1,200 | 3.8% | 45K |
+| Spring Launch | 4.2 | $800 | 2.9% | 32K |
+| Winter Promo | 0.8 | $600 | 0.9% | 28K |
 
 ## Key Findings
-- "Summer Sale Video" has the highest ROAS at 5.8
-- Image ads have 53% lower CTR on average
-- Top 3 performers are all video format
+- "Summer Sale Video" has the highest ROAS at 5.8, 38% above average
+- "Winter Promo" is underperforming with ROAS of 0.8 (below breakeven)
+- Top 3 performers all use video hooks under 3 seconds
 
 ## Recommendations
-1. **Increase video ad budget** - Video ROAS is 2x higher
-2. **Pause "Winter Promo"** - ROAS of 0.8 is below profitability threshold
-3. **Test video hooks** from "Summer Sale" on other campaigns`
+1. **Scale "Summer Sale Video"** - Increase budget by 50%, highest ROAS
+2. **Pause "Winter Promo"** - ROAS of 0.8 is below profitability
+3. **Apply learnings** - Test the video hook style on other campaigns`
 });

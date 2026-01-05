@@ -1,4 +1,5 @@
 import { Tool } from '../tool-base';
+import { logger } from '../utils/logger';
 
 /**
  * DataQueryTool
@@ -17,7 +18,9 @@ class DataQueryToolWrapper extends Tool {
 
     async process(input: string): Promise<string> {
         // 1. Get the Query Object from the LLM
+        logger.debug('DataQueryTool', 'Getting query from LLM', { input: input.slice(0, 200) });
         const queryJsonString = await super.process(input);
+        logger.debug('DataQueryTool', 'LLM query response', { queryJsonString: queryJsonString.slice(0, 500) });
 
         let queryObj;
         try {
@@ -56,7 +59,7 @@ class DataQueryToolWrapper extends Tool {
         }
 
         const url = `${this.baseUrl}/api/own-analytics?${params.toString()}`;
-        console.log(`[DataQueryTool] Fetching: ${url}`);
+        logger.debug('DataQueryTool', 'Calling API', { url });
 
         // 3. Call the actual API
         try {
@@ -67,21 +70,61 @@ class DataQueryToolWrapper extends Tool {
             
             const data = await response.json();
             let ads = data.ads || [];
+            
+            logger.debug('DataQueryTool', 'API Response received', { 
+                totalAds: ads.length,
+                groupBy: data.groupBy,
+                firstItem: ads[0] ? { 
+                    id: ads[0].id || ads[0].ad_id,
+                    name: ads[0].ad_name || ads[0].group_value,
+                    metrics: ads[0].metrics 
+                } : null
+            });
 
             // 4. Sort the results if sortBy is specified
             if (queryObj.sortBy && ads.length > 0) {
                 const sortField = queryObj.sortBy;
-                const sortOrder = queryObj.sortOrder === 'asc' ? 1 : -1;
+                const isAscending = queryObj.sortOrder === 'asc';
+                
+                logger.debug('DataQueryTool', 'Sorting data', { 
+                    sortField, 
+                    sortOrder: queryObj.sortOrder,
+                    isAscending,
+                    sampleValuesBefore: ads.slice(0, 3).map((a: any) => ({
+                        name: a.ad_name || a.group_value,
+                        [sortField]: a.metrics?.[sortField] ?? a[sortField]
+                    }))
+                });
                 
                 ads = ads.sort((a: any, b: any) => {
                     const aVal = a.metrics?.[sortField] ?? a[sortField] ?? 0;
                     const bVal = b.metrics?.[sortField] ?? b[sortField] ?? 0;
-                    return (bVal - aVal) * sortOrder;
+                    // For descending (default): highest first → bVal - aVal
+                    // For ascending: lowest first → aVal - bVal
+                    return isAscending ? (aVal - bVal) : (bVal - aVal);
+                });
+                
+                logger.debug('DataQueryTool', 'After sorting', { 
+                    sampleValuesAfter: ads.slice(0, 3).map((a: any) => ({
+                        name: a.ad_name || a.group_value,
+                        [sortField]: a.metrics?.[sortField] ?? a[sortField]
+                    }))
                 });
             }
 
             // 5. Limit to top results for efficiency
             const limitedAds = ads.slice(0, 20);
+            
+            logger.debug('DataQueryTool', 'Final result prepared', {
+                totalBeforeLimit: ads.length,
+                afterLimit: limitedAds.length,
+                topItems: limitedAds.slice(0, 3).map((ad: any) => ({
+                    id: ad.id || ad.ad_id,
+                    name: ad.ad_name || ad.group_value,
+                    roas: ad.metrics?.roas,
+                    spend: ad.metrics?.spend
+                }))
+            });
 
             // 6. Return the combined output as JSON string
             const resultObject = {

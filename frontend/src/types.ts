@@ -34,6 +34,20 @@ export interface PlanStatusEvent {
     result?: string;
 }
 
+// Item data for creative reports
+export interface ReportItemData {
+    thumbnail?: string;
+    displayFormat?: 'image' | 'video';
+    videoLength?: string;
+    metrics: {
+        roas?: number;
+        spend?: number;
+        ctr?: number;
+        impressions?: number;
+        cost_per_lead?: number;
+    };
+}
+
 // Report event
 export interface ReportEvent {
     type: 'report';
@@ -43,6 +57,7 @@ export interface ReportEvent {
     content: string;
     itemId?: string;
     itemName?: string;
+    itemData?: ReportItemData;
 }
 
 // Focused items event
@@ -88,12 +103,14 @@ export interface FocusedItemCard {
     thumbnail?: string;
     type?: 'ad' | 'creative' | 'headline' | 'ad_copy';
     displayFormat?: 'image' | 'video';
+    videoLength?: string;
     metrics: { 
         roas?: number; 
         spend?: number; 
         ctr?: number; 
         impressions?: number;
-        cpc?: number; 
+        cpc?: number;
+        cost_per_lead?: number;
     };
 }
 
@@ -130,7 +147,7 @@ export interface SessionContext {
 export type StreamedSection = 
     | { type: 'text'; content: string }
     | { type: 'plan'; planId: string; agentName: string; title: string; tasks: PlanTask[] }
-    | { type: 'report'; reportType: 'performance' | 'creative' | 'common'; reportId: string; title: string; content: string; itemId?: string; itemName?: string }
+    | { type: 'report'; reportType: 'performance' | 'creative' | 'common'; reportId: string; title: string; content: string; itemId?: string; itemName?: string; itemData?: ReportItemData }
     | { type: 'focused_items'; items: FocusedItemCard[] };
 
 /**

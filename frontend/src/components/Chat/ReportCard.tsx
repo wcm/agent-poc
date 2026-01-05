@@ -1,82 +1,92 @@
-import React, { useState } from 'react';
-import { FileText, BarChart3, Lightbulb, Sparkles } from 'lucide-react';
-import DocumentModal from './DocumentModal';
+import React, { useState } from "react";
+import { FileText, TrendingUp, Lightbulb, Sparkles, Play } from "lucide-react";
+import DocumentModal from "./DocumentModal";
+import CreativeReportModal from "./CreativeReportModal";
+import { ReportItemData } from "../../types";
 
 interface ReportCardProps {
-    reportType: 'performance' | 'creative' | 'common';
-    reportId: string;
-    title: string;
-    content: string;
-    itemName?: string;
+	reportType: "performance" | "creative" | "common";
+	reportId: string;
+	title: string;
+	content: string;
+	itemName?: string;
+	itemData?: ReportItemData;
 }
 
-const getReportIcon = (reportType: ReportCardProps['reportType']) => {
-    switch (reportType) {
-        case 'performance':
-            return <BarChart3 size={18} className="report-icon performance" />;
-        case 'creative':
-            return <Lightbulb size={18} className="report-icon creative" />;
-        case 'common':
-            return <Sparkles size={18} className="report-icon common" />;
-        default:
-            return <FileText size={18} className="report-icon" />;
-    }
+const getReportIcon = (reportType: ReportCardProps["reportType"]) => {
+	switch (reportType) {
+		case "performance":
+			return <TrendingUp size={12} fill="currentColor" className="report-icon performance" />;
+		case "creative":
+			return <Lightbulb size={12} fill="currentColor" className="report-icon creative" />;
+		case "common":
+			return <Sparkles size={12} fill="currentColor" className="report-icon common" />;
+		default:
+			return <FileText size={12} fill="currentColor" className="report-icon" />;
+	}
 };
 
-const getReportTypeLabel = (reportType: ReportCardProps['reportType']) => {
-    switch (reportType) {
-        case 'performance':
-            return 'Performance';
-        case 'creative':
-            return 'Creative';
-        case 'common':
-            return 'Common Findings';
-        default:
-            return 'Report';
-    }
+const getReportTypeLabel = (reportType: ReportCardProps["reportType"]) => {
+	switch (reportType) {
+		case "performance":
+			return "Performance";
+		case "creative":
+			return "Creative";
+		case "common":
+			return "Common Findings";
+		default:
+			return "Report";
+	}
 };
 
-const ReportCard: React.FC<ReportCardProps> = ({ reportType, reportId, title, content, itemName }) => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
+const ReportCard: React.FC<ReportCardProps> = ({ reportType, reportId, title, content, itemName, itemData }) => {
+	const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Get first 3-4 lines for preview
-    const preview = content.split('\n').slice(0, 4).join('\n');
+	// Get first few lines for preview, join with spaces for compact display
+	const preview = content
+		.split("\n")
+		.slice(0, 10)
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0)
+		.join("  ");
 
-    return (
-        <>
-            <div 
-                className={`report-card ${reportType}`}
-                onClick={() => setIsModalOpen(true)}
-            >
-                <div className="report-card-header">
-                    {getReportIcon(reportType)}
-                    <div className="report-card-titles">
-                        <span className="report-title">{title}</span>
-                        {itemName && <span className="report-item">{itemName}</span>}
-                    </div>
-                    <span className={`report-type-badge ${reportType}`}>
-                        {getReportTypeLabel(reportType)}
-                    </span>
-                </div>
-                <div className="report-card-preview">
-                    {preview.split('\n').map((line, idx) => (
-                        <p key={idx}>{line || '\u00A0'}</p>
-                    ))}
-                </div>
-                <div className="report-card-footer">
-                    <span className="view-full">Click to view full report</span>
-                </div>
-            </div>
-            {isModalOpen && (
-                <DocumentModal 
-                    title={title} 
-                    content={content} 
-                    onClose={() => setIsModalOpen(false)} 
-                />
-            )}
-        </>
-    );
+	// Show thumbnail for creative reports
+	const showThumbnail = reportType === "creative" && itemData?.thumbnail;
+
+	return (
+		<>
+			<div className={`report-card ${reportType} ${showThumbnail ? "with-thumbnail" : ""}`} onClick={() => setIsModalOpen(true)}>
+				{showThumbnail && (
+					<div className="report-card-thumbnail">
+						<img src={itemData.thumbnail} alt={itemName || title} />
+						{itemData.displayFormat === "video" && (
+							<div className="thumbnail-video-indicator">
+								<Play size={12} fill="white" />
+							</div>
+						)}
+					</div>
+				)}
+				<div className="report-card-content">
+					<div className="report-card-header">
+						<div className="report-card-titles">
+							<span className="report-title">{title}</span>
+						</div>
+						<div className={`report-type-badge ${reportType}`}>
+							{getReportTypeLabel(reportType)}
+							{getReportIcon(reportType)}
+						</div>
+					</div>
+					<div className="report-card-preview">{preview}</div>
+				</div>
+			</div>
+			{isModalOpen &&
+				(reportType === "creative" && itemData ? (
+					<CreativeReportModal title={title} content={content} itemName={itemName || title} itemData={itemData} onClose={() => setIsModalOpen(false)} />
+				) : (
+					<DocumentModal title={title} content={content} onClose={() => setIsModalOpen(false)} />
+				))}
+		</>
+	);
 };
 
 export default ReportCard;
-

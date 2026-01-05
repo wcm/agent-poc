@@ -4,6 +4,7 @@ import cors from 'cors';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
 import { ConversationOrchestrator } from './conversation-orchestrator';
+import { logger } from './utils/logger';
 
 dotenv.config();
 
@@ -16,8 +17,18 @@ app.use(express.json());
 // Serve static files from the React frontend app
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// Store the Conversation Orchestrator instance to maintain state across requests
-let orchestrator: ConversationOrchestrator | null = null;
+// Store orchestrator instances per session for isolation
+const orchestrators = new Map<string, ConversationOrchestrator>();
+
+function getOrchestrator(sessionId: string): ConversationOrchestrator {
+    if (!orchestrators.has(sessionId)) {
+        logger.session(sessionId, 'CREATE');
+        orchestrators.set(sessionId, new ConversationOrchestrator());
+    } else {
+        logger.session(sessionId, 'ACCESS');
+    }
+    return orchestrators.get(sessionId)!;
+}
 
 // Helper to read/write data
 const DATA_DIR = path.join(process.cwd(), 'src', 'data');
@@ -40,6 +51,7 @@ app.get('/api/stream', async (req: Request, res: Response) => {
 
     const message = req.query.message as string;
     const channelId = (req.query.channelId as string) || 'channel_1';
+    const sessionId = (req.query.sessionId as string) || 'default';
 
     if (!message) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: "Message required" })}\n\n`);
@@ -47,10 +59,8 @@ app.get('/api/stream', async (req: Request, res: Response) => {
         return;
     }
 
-    // Initialize or reuse the Conversation Orchestrator to keep history
-    if (!orchestrator) {
-        orchestrator = new ConversationOrchestrator();
-    }
+    // Get or create orchestrator for this session
+    const orchestrator = getOrchestrator(sessionId);
 
     // Listen for stream events from the orchestrator and forward them to the client
     const onStream = (event: any) => {
@@ -72,10 +82,12 @@ app.get('/api/stream', async (req: Request, res: Response) => {
 });
 
 app.post('/api/clear', (req: Request, res: Response) => {
-    if (orchestrator) {
-        orchestrator.clearHistory();
+    const sessionId = req.body?.sessionId;
+    if (sessionId && orchestrators.has(sessionId)) {
+        orchestrators.delete(sessionId);
+        logger.session(sessionId, 'DELETE');
     }
-    res.json({ message: 'History cleared' });
+    res.json({ message: 'Session cleared' });
 });
 
 // --- Brand & Discovery Data Endpoints ---

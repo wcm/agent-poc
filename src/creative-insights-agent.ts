@@ -5,6 +5,7 @@ import { commonFindingsTool } from './tools/common-findings';
 import { Tool } from './tool-base';
 import { EventEmitter } from 'events';
 import { SSEEvent, StreamEmitter, PlanTask } from './types';
+import { logger } from './utils/logger';
 
 /**
  * Focused Item - flexible input type
@@ -15,6 +16,7 @@ export interface FocusedItem {
     type: 'ad' | 'creative' | 'headline' | 'ad_copy';
     image_url?: string;
     display_format?: 'image' | 'video';
+    video_length?: string;
     metrics: Record<string, number>;
 }
 
@@ -103,15 +105,22 @@ Return ONLY the JSON object.`
         objective: string,
         stream: StreamEmitter
     ): Promise<CreativeInsightsResult> {
-        console.log(`[CreativeInsights] Starting analysis for ${focusedItems.length} items`);
-        console.log(`[CreativeInsights] Objective: ${objective}`);
+        logger.debug('CreativeInsightsAgent', 'Internal analysis starting', { 
+            itemsCount: focusedItems.length, 
+            objective 
+        });
 
         const reports: CreativeReport[] = [];
 
         // Process each focused item
         for (let i = 0; i < focusedItems.length; i++) {
             const item = focusedItems[i];
-            console.log(`[CreativeInsights] Processing item ${i + 1}/${focusedItems.length}: ${item.name}`);
+            logger.debug('CreativeInsightsAgent', `Processing item ${i + 1}/${focusedItems.length}`, {
+                itemId: item.id,
+                itemName: item.name,
+                type: item.type,
+                displayFormat: item.display_format
+            });
 
             // Create a plan for this item
             const planId = `creative-item-${i + 1}`;
@@ -143,10 +152,22 @@ Return ONLY the JSON object.`
                     type: 'report',
                     reportType: 'creative',
                     reportId: `creative-report-${item.id}`,
-                    title: `Creative Report: ${item.name}`,
+                    title: `Creative Insights: ${item.name}`,
                     content: report.formattedContent,
                     itemId: item.id,
-                    itemName: item.name
+                    itemName: item.name,
+                    itemData: {
+                        thumbnail: item.image_url,
+                        displayFormat: item.display_format,
+                        videoLength: item.video_length,
+                        metrics: {
+                            roas: item.metrics.roas,
+                            spend: item.metrics.spend,
+                            ctr: item.metrics.ctr,
+                            impressions: item.metrics.impressions,
+                            cost_per_lead: item.metrics.cost_per_lead
+                        }
+                    }
                 });
 
             } catch (error: any) {
@@ -347,7 +368,7 @@ Analyze this ad copy for persuasion techniques, benefit focus, and improvement o
      * Format the full report including item name, context, and analysis
      */
     private formatFullReport(report: CreativeReport): string {
-        let content = `## ${report.itemName}\n\n`;
+        let content = report.analysisMarkdown;
         
         if (report.imageDescription) {
             content += `### Image Analysis\n${report.imageDescription}\n\n`;
@@ -355,9 +376,6 @@ Analyze this ad copy for persuasion techniques, benefit focus, and improvement o
         if (report.videoTranscript) {
             content += `### Video Script\n${report.videoTranscript}\n\n`;
         }
-        
-        // Add the analysis markdown directly
-        content += report.analysisMarkdown;
         
         return content;
     }

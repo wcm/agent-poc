@@ -169,6 +169,7 @@ const MainLayout: React.FC = () => {
 					content: event.content,
 					itemId: event.itemId,
 					itemName: event.itemName,
+					itemData: event.itemData,
 				};
 				sectionsRef.current.push(section);
 				setStreamingSections([...sectionsRef.current]);
@@ -285,7 +286,8 @@ const MainLayout: React.FC = () => {
 
 		// 4. Start SSE streaming
 		const channelParam = activeChannelId ? `&channelId=${encodeURIComponent(activeChannelId)}` : "";
-		const apiUrl = `${baseUrl}/api/stream?message=${encodeURIComponent(content)}${channelParam}`;
+		const sessionParam = `&sessionId=${encodeURIComponent(currentSessionId)}`;
+		const apiUrl = `${baseUrl}/api/stream?message=${encodeURIComponent(content)}${channelParam}${sessionParam}`;
 
 		const eventSource = new EventSource(apiUrl);
 		const sessionId = currentSessionId; // Capture for closure
