@@ -116,7 +116,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 	const filterDropdownRef = useRef<HTMLDivElement>(null);
 	const groupByDropdownRef = useRef<HTMLDivElement>(null);
 
-	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3001" : "";
+	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3002" : "";
 
 	// Build URL with query params
 	const buildApiUrl = useCallback(() => {

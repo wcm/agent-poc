@@ -4,7 +4,7 @@
   "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
-    "dev": "ts-node src/server.ts",
+    "dev": "PORT=3002 ts-node src/server.ts",
     "build": "npm install && npm install --prefix frontend && npm run build --prefix frontend && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

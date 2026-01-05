@@ -1,163 +1,26 @@
 import { Tool } from '../tool-base';
+import { GlobalContext, DataSet, QueryParams, AdData, generateId } from '../context';
 import { logger } from '../utils/logger';
+
+/**
+ * DataQuery Tool Result
+ */
+export interface DataQueryResult {
+    dataSet: DataSet;
+    message: string;
+}
 
 /**
  * DataQueryTool
  * 
- * Translates analysis requests into API queries and fetches real data
- * from the /api/own-analytics endpoint.
+ * Translates analysis requests into API queries and fetches real data.
+ * Stores results in the GlobalContext and returns a confirmation message.
  */
 class DataQueryToolWrapper extends Tool {
     private baseUrl: string;
 
-    constructor(config: any) {
-        super(config);
-        // Use localhost for server-side calls
-        this.baseUrl = 'http://localhost:3001';
-    }
-
-    async process(input: string): Promise<string> {
-        // 1. Get the Query Object from the LLM
-        logger.debug('DataQueryTool', 'Getting query from LLM', { input: input.slice(0, 200) });
-        const queryJsonString = await super.process(input);
-        logger.debug('DataQueryTool', 'LLM query response', { queryJsonString: queryJsonString.slice(0, 500) });
-
-        let queryObj;
-        try {
-            // Clean up Markdown if present
-            const cleanJson = queryJsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-            queryObj = JSON.parse(cleanJson);
-        } catch (e) {
-            return JSON.stringify({
-                summary: `Failed to generate valid query: ${queryJsonString}`,
-                structuredData: []
-            });
-        }
-
-        // 2. Build URL with query parameters
-        const params = new URLSearchParams();
-        
-        if (queryObj.channel) {
-            params.append('channel', queryObj.channel);
-        }
-        if (queryObj.groupBy) {
-            params.append('groupBy', queryObj.groupBy);
-        }
-        if (queryObj.filters) {
-            if (queryObj.filters.display_format) {
-                params.append('display_format', queryObj.filters.display_format);
-            }
-            if (queryObj.filters.status) {
-                params.append('status', queryObj.filters.status);
-            }
-            if (queryObj.filters.start_date_from) {
-                params.append('start_date_from', queryObj.filters.start_date_from);
-            }
-            if (queryObj.filters.start_date_to) {
-                params.append('start_date_to', queryObj.filters.start_date_to);
-            }
-        }
-
-        const url = `${this.baseUrl}/api/own-analytics?${params.toString()}`;
-        logger.debug('DataQueryTool', 'Calling API', { url });
-
-        // 3. Call the actual API
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`API returned ${response.status}: ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            let ads = data.ads || [];
-            
-            logger.debug('DataQueryTool', 'API Response received', { 
-                totalAds: ads.length,
-                groupBy: data.groupBy,
-                firstItem: ads[0] ? { 
-                    id: ads[0].id || ads[0].ad_id,
-                    name: ads[0].ad_name || ads[0].group_value,
-                    metrics: ads[0].metrics 
-                } : null
-            });
-
-            // 4. Sort the results if sortBy is specified
-            if (queryObj.sortBy && ads.length > 0) {
-                const sortField = queryObj.sortBy;
-                const isAscending = queryObj.sortOrder === 'asc';
-                
-                logger.debug('DataQueryTool', 'Sorting data', { 
-                    sortField, 
-                    sortOrder: queryObj.sortOrder,
-                    isAscending,
-                    sampleValuesBefore: ads.slice(0, 3).map((a: any) => ({
-                        name: a.ad_name || a.group_value,
-                        [sortField]: a.metrics?.[sortField] ?? a[sortField]
-                    }))
-                });
-                
-                ads = ads.sort((a: any, b: any) => {
-                    const aVal = a.metrics?.[sortField] ?? a[sortField] ?? 0;
-                    const bVal = b.metrics?.[sortField] ?? b[sortField] ?? 0;
-                    // For descending (default): highest first → bVal - aVal
-                    // For ascending: lowest first → aVal - bVal
-                    return isAscending ? (aVal - bVal) : (bVal - aVal);
-                });
-                
-                logger.debug('DataQueryTool', 'After sorting', { 
-                    sampleValuesAfter: ads.slice(0, 3).map((a: any) => ({
-                        name: a.ad_name || a.group_value,
-                        [sortField]: a.metrics?.[sortField] ?? a[sortField]
-                    }))
-                });
-            }
-
-            // 5. Limit to top results for efficiency
-            const limitedAds = ads.slice(0, 20);
-            
-            logger.debug('DataQueryTool', 'Final result prepared', {
-                totalBeforeLimit: ads.length,
-                afterLimit: limitedAds.length,
-                topItems: limitedAds.slice(0, 3).map((ad: any) => ({
-                    id: ad.id || ad.ad_id,
-                    name: ad.ad_name || ad.group_value,
-                    roas: ad.metrics?.roas,
-                    spend: ad.metrics?.spend
-                }))
-            });
-
-            // 6. Return the combined output as JSON string
-            const resultObject = {
-                summary: `QUERY EXECUTED:
-${JSON.stringify(queryObj, null, 2)}
-
-DATA RETRIEVED:
-- Total items: ${ads.length}
-- Group by: ${data.groupBy || 'ad_name'}
-- Top ${Math.min(3, limitedAds.length)} results:
-${JSON.stringify(limitedAds.slice(0, 3).map((ad: any) => ({
-    name: ad.ad_name || ad.group_value,
-    spend: ad.metrics?.spend,
-    roas: ad.metrics?.roas,
-    ctr: ad.metrics?.ctr,
-    impressions: ad.metrics?.impressions
-})), null, 2)}`,
-                structuredData: limitedAds
-            };
-
-            return JSON.stringify(resultObject);
-
-        } catch (e: any) {
-            console.error('[DataQueryTool] API Error:', e);
-            return JSON.stringify({
-                summary: `Error fetching data: ${e.message}`,
-                structuredData: []
-            });
-        }
-    }
-}
-
-export const dataQueryTool = new DataQueryToolWrapper({
+    constructor() {
+        super({
     name: "DataQuery",
     model: "google/gemini-2.5-flash-lite",
     systemPrompt: `You are a Data Query Tool for a Marketing Analytics Platform.
@@ -205,31 +68,188 @@ Return a JSON object ONLY:
 }
 
 ## RULES
-1. Extract channel ID from the input context
-2. Choose groupBy based on what the analysis needs
+1. Extract channel ID from the context
+2. Choose groupBy based on what the analysis needs (default: ad_name)
 3. Apply filters only if explicitly requested
-4. Default sortBy to "spend" if not specified
-5. Default sortOrder to "desc" (highest first)
+4. Default sortBy to "roas" for performance queries, "spend" for spend queries
+5. For "top" queries use "desc", for "worst/bottom" use "asc"
 
 ## EXAMPLES
 
-Input: "Channel ID: channel_1, Task: Fetch video ads sorted by ROAS"
-Output:
-{
-    "channel": "channel_1",
-    "groupBy": "ad_name",
-    "filters": { "display_format": "video" },
-    "sortBy": "roas",
-    "sortOrder": "desc"
+Task: "Query top 5 ads by ROAS"
+Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": {}, "sortBy": "roas", "sortOrder": "desc" }
+
+Task: "Query video ads sorted by spend"
+Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": { "display_format": "video" }, "sortBy": "spend", "sortOrder": "desc" }
+
+Task: "Query worst performing ads"
+Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": {}, "sortBy": "roas", "sortOrder": "asc" }`
+        });
+        // Use localhost for server-side calls
+        this.baseUrl = 'http://localhost:3002';
+    }
+
+    /**
+     * Execute a data query and update context
+     */
+    async execute(stepDescription: string, context: GlobalContext): Promise<DataQueryResult> {
+        logger.debug('DataQueryTool', 'Executing query', { stepDescription });
+
+        // 1. Get query parameters from LLM
+        const queryInput = `
+Channel ID: ${context.channel.id}
+Channel Name: ${context.channel.name}
+Platform: ${context.channel.platform}
+
+Task: ${stepDescription}
+
+User's Original Request: ${context.userInput}
+
+Generate the query parameters.
+`;
+        
+        const queryJsonString = await this.process(queryInput);
+        logger.debug('DataQueryTool', 'LLM query response', { queryJsonString: queryJsonString.slice(0, 500) });
+
+        let queryParams: QueryParams;
+        try {
+            const cleanJson = queryJsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+            queryParams = JSON.parse(cleanJson);
+        } catch (e) {
+            const match = queryJsonString.match(/\{[\s\S]*\}/);
+            if (match) {
+                queryParams = JSON.parse(match[0]);
+            } else {
+                throw new Error(`Failed to generate valid query: ${queryJsonString}`);
+            }
+        }
+
+        // 2. Build URL with query parameters
+        const params = new URLSearchParams();
+        
+        if (queryParams.channel) {
+            params.append('channel', queryParams.channel);
+        } else {
+            params.append('channel', context.channel.id);
+        }
+        if (queryParams.groupBy) {
+            params.append('groupBy', queryParams.groupBy);
+        }
+        if (queryParams.filters) {
+            if (queryParams.filters.display_format) {
+                params.append('display_format', queryParams.filters.display_format);
+            }
+            if (queryParams.filters.status) {
+                params.append('status', queryParams.filters.status);
+            }
+            if (queryParams.filters.start_date_from) {
+                params.append('start_date_from', queryParams.filters.start_date_from);
+            }
+            if (queryParams.filters.start_date_to) {
+                params.append('start_date_to', queryParams.filters.start_date_to);
+            }
+        }
+
+        const url = `${this.baseUrl}/api/own-analytics?${params.toString()}`;
+        logger.debug('DataQueryTool', 'Calling API', { url });
+
+        // 3. Call the actual API
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`API returned ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            let ads: AdData[] = data.ads || [];
+            
+            logger.debug('DataQueryTool', 'API Response received', { 
+                totalAds: ads.length,
+                groupBy: data.groupBy
+            });
+
+            // 4. Sort the results
+            if (queryParams.sortBy && ads.length > 0) {
+                const sortField = queryParams.sortBy;
+                const isAscending = queryParams.sortOrder === 'asc';
+                
+                ads = ads.sort((a: AdData, b: AdData) => {
+                    const aVal = a.metrics?.[sortField as keyof typeof a.metrics] ?? 0;
+                    const bVal = b.metrics?.[sortField as keyof typeof b.metrics] ?? 0;
+                    return isAscending ? (aVal - bVal) : (bVal - aVal);
+                });
+            }
+
+            // 5. Limit to top 20 results
+            const limitedAds = ads.slice(0, 20);
+
+            // 6. Create DataSet and add to context
+            const dataSet: DataSet = {
+                id: generateId('dataset'),
+                queryDescription: stepDescription,
+                queryParams: queryParams,
+                data: limitedAds,
+                timestamp: Date.now()
+            };
+
+            context.dataSets.push(dataSet);
+
+            // 7. Generate confirmation message
+            const message = this.generateMessage(dataSet, queryParams);
+
+            return { dataSet, message };
+
+        } catch (e: any) {
+            logger.log('ERROR', { component: 'DataQueryTool', action: 'FETCH' }, e.message);
+            throw new Error(`Error fetching data: ${e.message}`);
+        }
+    }
+
+    /**
+     * Generate a comprehensive message about the query and results
+     */
+    private generateMessage(dataSet: DataSet, queryParams: QueryParams): string {
+        // const topItems = dataSet.data.slice(0, 3);
+        const sortField = queryParams.sortBy || 'spend';
+        const sortOrder = queryParams.sortOrder || 'desc';
+        
+        let message = `**Query Details:**\n`;
+        
+        // Query parameters section
+        message += `- Group by: ${queryParams.groupBy || 'ad_name'}\n`;
+        message += `- Sort: ${sortField} (${sortOrder === 'desc' ? 'highest first' : 'lowest first'})\n`;
+        
+        // Filters applied
+        if (queryParams.filters) {
+            const filters: string[] = [];
+            if (queryParams.filters.display_format) filters.push(`Format: ${queryParams.filters.display_format}`);
+            if (queryParams.filters.status) filters.push(`Status: ${queryParams.filters.status}`);
+            if (queryParams.filters.start_date_from) filters.push(`From: ${queryParams.filters.start_date_from}`);
+            if (queryParams.filters.start_date_to) filters.push(`To: ${queryParams.filters.start_date_to}`);
+            if (filters.length > 0) {
+                message += `- Filters: ${filters.join(', ')}\n`;
+            }
+        }
+        
+        // Results summary
+        message += `\n**Results:** ${dataSet.data.length} items found\n`;
+        
+        // // Top items preview with comprehensive metrics
+        // if (topItems.length > 0) {
+        //     message += `\n**Top ${topItems.length} Results:**\n`;
+        //     topItems.forEach((item, i) => {
+        //         const name = item.ad_name || item.group_value || item.creative_name || 'Unknown';
+        //         const format = item.display_format ? ` [${item.display_format}]` : '';
+        //         message += `\n${i + 1}. **${name}**${format}\n`;
+        //         message += `   • ROAS: ${item.metrics.roas?.toFixed(2) || 'N/A'}`;
+        //         message += ` | Spend: $${item.metrics.spend?.toFixed(0) || '0'}`;
+        //         message += ` | CTR: ${(item.metrics.ctr || 0).toFixed(2)}%`;
+        //         message += `\n`;
+        //     });
+        // }
+        
+        return message;
+    }
 }
 
-Input: "Channel ID: channel_2, Task: Get creative performance data"
-Output:
-{
-    "channel": "channel_2",
-    "groupBy": "creative_name",
-    "filters": {},
-    "sortBy": "spend",
-    "sortOrder": "desc"
-}`
-});
+export const dataQueryTool = new DataQueryToolWrapper();

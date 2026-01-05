@@ -13,7 +13,7 @@ const FollowingBrands: React.FC<FollowingBrandsProps> = ({ onViewDetails }) => {
 
     useEffect(() => {
         const fetchData = async () => {
-             const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3001" : "";
+             const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3002" : "";
              
              try {
                 // Fetch Brands

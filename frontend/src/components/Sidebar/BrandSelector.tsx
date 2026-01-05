@@ -18,7 +18,7 @@ const BrandSelector: React.FC<BrandSelectorProps> = ({ activeBrand, onBrandChang
   const [ownBrands, setOwnBrands] = useState<OwnBrand[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3001" : "";
+  const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3002" : "";
 
   useEffect(() => {
     const fetchOwnBrands = async () => {

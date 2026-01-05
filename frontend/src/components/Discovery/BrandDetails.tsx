@@ -13,7 +13,7 @@ const BrandDetails: React.FC<BrandDetailsProps> = ({ brandId, onBack }) => {
 	const [ads, setAds] = useState<Ad[]>([]);
 	const [loading, setLoading] = useState(true);
 
-	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3001" : "";
+	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3002" : "";
 
 	useEffect(() => {
 		const loadData = async () => {

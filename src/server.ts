@@ -3,13 +3,13 @@ import path from 'path';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
-import { ConversationOrchestrator } from './conversation-orchestrator';
+import { Agent } from './agent';
 import { logger } from './utils/logger';
 
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3002;
 
 app.use(cors());
 app.use(express.json());
@@ -17,17 +17,17 @@ app.use(express.json());
 // Serve static files from the React frontend app
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// Store orchestrator instances per session for isolation
-const orchestrators = new Map<string, ConversationOrchestrator>();
+// Store agent instances per session for isolation
+const agents = new Map<string, Agent>();
 
-function getOrchestrator(sessionId: string): ConversationOrchestrator {
-    if (!orchestrators.has(sessionId)) {
+function getAgent(sessionId: string): Agent {
+    if (!agents.has(sessionId)) {
         logger.session(sessionId, 'CREATE');
-        orchestrators.set(sessionId, new ConversationOrchestrator());
+        agents.set(sessionId, new Agent());
     } else {
         logger.session(sessionId, 'ACCESS');
     }
-    return orchestrators.get(sessionId)!;
+    return agents.get(sessionId)!;
 }
 
 // Helper to read/write data
@@ -59,32 +59,33 @@ app.get('/api/stream', async (req: Request, res: Response) => {
         return;
     }
 
-    // Get or create orchestrator for this session
-    const orchestrator = getOrchestrator(sessionId);
+    // Get or create agent for this session
+    const agent = getAgent(sessionId);
 
-    // Listen for stream events from the orchestrator and forward them to the client
+    // Listen for stream events from the agent and forward them to the client
     const onStream = (event: any) => {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
-    orchestrator.on('stream', onStream);
+    agent.on('stream', onStream);
 
     try {
-        // handleRequest now streams events and returns void
-        await orchestrator.handleRequest(message, channelId);
+        // handleRequest streams events and returns void
+        await agent.handleRequest(message, channelId);
     } catch (error: any) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
         res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     } finally {
         // Clean up listener to avoid leaks
-        orchestrator.off('stream', onStream);
+        agent.off('stream', onStream);
         res.end();
     }
 });
 
 app.post('/api/clear', (req: Request, res: Response) => {
     const sessionId = req.body?.sessionId;
-    if (sessionId && orchestrators.has(sessionId)) {
-        orchestrators.delete(sessionId);
+    if (sessionId && agents.has(sessionId)) {
+        agents.get(sessionId)?.clearHistory();
+        agents.delete(sessionId);
         logger.session(sessionId, 'DELETE');
     }
     res.json({ message: 'Session cleared' });

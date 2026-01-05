@@ -1,142 +1,172 @@
 import { Tool } from '../tool-base';
+import { GlobalContext, getContextSummary } from '../context';
+
+/**
+ * Narrator message types
+ */
+export type NarratorMessageType = 
+    | 'intro'           // Start of analysis
+    | 'step_complete'   // After a tool completes
+    | 'transition'      // Between major phases
+    | 'final'           // End of plan with suggestions
+    | 'error';          // When something goes wrong
 
 /**
  * Context for generating narrator messages
  */
-export interface NarratorContext {
-    userQuestion: string;
-    messageType: 'intro' | 'transition' | 'summary';
-    
-    // For intro/transition
-    nextAgent?: 'performance' | 'creative_insights';
-    agentObjective?: string;
-    
-    // For transition - what just happened
-    previousAgent?: 'performance' | 'creative_insights';
-    previousResult?: {
-        itemsFound?: number;
-        reportGenerated?: boolean;
-    };
-    
-    // For summary - what was accomplished
-    agentsRun?: string[];
-    totalReports?: number;
-    focusedItemsCount?: number;
-    commonFindingsGenerated?: boolean;
+export interface NarratorInput {
+    type: NarratorMessageType;
+    userInput: string;
+    stepDescription?: string;           // Current/next step description
+    stepResult?: string;                // Result from previous step
+    previousStepDescription?: string;   // What the previous step did
+    planObjective?: string;
+    completedSteps?: number;
+    totalSteps?: number;
+    context: GlobalContext;
+    error?: string;
 }
 
 /**
  * NarratorTool
  * 
- * Generates contextual, natural-sounding messages for:
+ * Generates contextual, natural-sounding messages:
  * - Intro: What we're about to do
- * - Transition: Moving between agents
- * - Summary: Final wrap-up with recommendations
+ * - Step complete: Brief update after each step
+ * - Transition: Moving between phases
+ * - Final: Summary with suggested next actions
  */
 class NarratorToolWrapper extends Tool {
     constructor() {
         super({
             name: "Narrator",
             model: "google/gemini-2.5-flash-lite",
-            systemPrompt: `You are a concise narrator for an AI marketing analytics assistant. Generate SHORT, natural messages (1-2 sentences max) based on the context.
+            systemPrompt: `You are a concise narrator for an AI marketing analytics assistant. Generate SHORT, natural messages based on the context.
 
 ## MESSAGE TYPES
 
 ### INTRO
-A brief message explaining what you're about to do. Match the user's intent:
-- If they asked about "worst" or "underperforming" → mention analyzing weak performers
-- If they asked about "best" or "top" → mention analyzing top performers
-- Be specific to their question
+Brief intro (1 sentence) about what you're starting. Match the user's intent.
+Example: "Let me analyze your top performing ads to find success patterns..."
 
-Examples:
-- "Let me analyze your worst performing ads to identify improvement opportunities..."
-- "I'll look at your top video creatives to understand what's working..."
-- "Checking your headline performance data now..."
+### STEP_COMPLETE  
+Very brief acknowledgment (1 short sentence or skip if obvious from results).
+Example: "Found 5 high-ROAS ads." or "Analysis complete for Summer Campaign."
 
 ### TRANSITION
-A brief bridge between analysis steps. Reference what was found:
-- Mention how many items were identified if relevant
-- Set up what's coming next
-
+Bridge between steps - summarize what was just done and introduce the next step (1-2 sentences).
 Examples:
-- "Found 5 underperforming ads. Let me analyze what's not working with their creatives..."
-- "I've identified your top 3 performers. Now examining their creative elements..."
-- "Performance analysis complete. Diving into the creative strategy now..."
+- "Found 5 high-performing ads with strong ROAS. Now let me analyze their creative elements..."
+- "The top spenders share similar messaging patterns. Let me compare these with your ROAS performers..."
+- "Creative analysis complete for your top ads. Now examining your underperformers to find the differences..."
 
-### SUMMARY
-A brief wrap-up with a suggested next action. Be helpful:
-- Reference what was analyzed
-- Suggest ONE clear next step or question they might want to explore
-
+### FINAL
+Summary (1-2 sentences) with a SPECIFIC suggested next action or question.
 Examples:
-- "Analysis complete! You might want to explore why your video hooks are outperforming image ads."
-- "Based on these findings, consider asking about your top headlines next."
-- "Would you like me to compare this with your other channel's performance?"
+- "Based on this analysis, your video hooks outperform images by 40%. Would you like me to analyze what makes your video intros effective?"
+- "I found that urgency messaging drives 2x higher ROAS. Want me to suggest ways to add urgency to your underperforming ads?"
+- "Your top ads share a 'social proof' pattern. Should I compare these patterns against your TikTok channel?"
+
+### ERROR
+Friendly error message explaining what went wrong.
+Example: "I couldn't complete the analysis because no data was found for those filters. Try adjusting your criteria."
 
 ## RULES
-- Keep messages SHORT (1-2 sentences)
-- Match the user's original intent and language
+- Keep messages SHORT (1-2 sentences max)
+- Match the user's original intent
 - Be conversational, not robotic
-- Don't repeat the user's question back
-- Output ONLY the message, no formatting or labels`
+- For FINAL messages, ALWAYS suggest a specific follow-up action
+- Don't repeat what's already shown in reports
+- Output ONLY the message text, no formatting`
         });
     }
 
     /**
      * Generate a contextual narrator message
      */
-    async generate(context: NarratorContext): Promise<string> {
-        const input = this.buildPrompt(context);
+    async generate(input: NarratorInput): Promise<string> {
+        const prompt = this.buildPrompt(input);
         
         try {
-            const response = await this.process(input);
-            // Clean up any extra formatting
-            return response.trim().replace(/^["']|["']$/g, '');
+            const response = await this.process(prompt);
+            const message = response.trim().replace(/^["']|["']$/g, '');
+            
+            // Add to narrator history for follow-up context
+            input.context.narratorHistory.push(message);
+            
+            return message;
         } catch (error) {
             console.error('[NarratorTool] Error:', error);
-            // Return a safe fallback
-            return this.getFallback(context);
+            return this.getFallback(input.type);
         }
     }
 
-    private buildPrompt(context: NarratorContext): string {
-        let prompt = `User's question: "${context.userQuestion}"\n`;
-        prompt += `Message type: ${context.messageType.toUpperCase()}\n`;
+    /**
+     * Build the prompt for the LLM
+     */
+    private buildPrompt(input: NarratorInput): string {
+        let prompt = `User's request: "${input.userInput}"\n`;
+        prompt += `Message type: ${input.type.toUpperCase()}\n`;
         
-        if (context.messageType === 'intro') {
-            prompt += `\nNext agent: ${context.nextAgent}\n`;
-            prompt += `Objective: ${context.agentObjective}\n`;
-            prompt += `\nGenerate a brief intro message for what we're about to do.`;
-            
-        } else if (context.messageType === 'transition') {
-            prompt += `\nPrevious agent: ${context.previousAgent}\n`;
-            if (context.previousResult) {
-                prompt += `Items found: ${context.previousResult.itemsFound || 0}\n`;
-                prompt += `Report generated: ${context.previousResult.reportGenerated ? 'yes' : 'no'}\n`;
-            }
-            prompt += `Next agent: ${context.nextAgent}\n`;
-            prompt += `Next objective: ${context.agentObjective}\n`;
-            prompt += `\nGenerate a brief transition message bridging to the next step.`;
-            
-        } else if (context.messageType === 'summary') {
-            prompt += `\nAgents run: ${context.agentsRun?.join(', ') || 'none'}\n`;
-            prompt += `Total reports generated: ${context.totalReports || 0}\n`;
-            prompt += `Items analyzed: ${context.focusedItemsCount || 0}\n`;
-            prompt += `Common findings: ${context.commonFindingsGenerated ? 'yes' : 'no'}\n`;
-            prompt += `\nGenerate a brief summary with a suggested follow-up question or action.`;
+        if (input.planObjective) {
+            prompt += `Plan objective: ${input.planObjective}\n`;
+        }
+
+        switch (input.type) {
+            case 'intro':
+                prompt += `\nGenerate a brief intro for what we're about to do.`;
+                break;
+                
+            case 'step_complete':
+                prompt += `\nStep completed: ${input.stepDescription}\n`;
+                if (input.stepResult) {
+                    prompt += `Result: ${input.stepResult}\n`;
+                }
+                prompt += `Progress: ${input.completedSteps}/${input.totalSteps} steps\n`;
+                prompt += `\nGenerate a very brief acknowledgment (or empty if the result speaks for itself).`;
+                break;
+                
+            case 'transition':
+                prompt += `\nPrevious step: ${input.previousStepDescription || 'N/A'}\n`;
+                prompt += `Previous result: ${input.stepResult || 'N/A'}\n`;
+                prompt += `Next step: ${input.stepDescription}\n`;
+                prompt += `Progress: ${input.completedSteps}/${input.totalSteps} steps\n`;
+                prompt += `\nGenerate a brief transition that:
+1. Briefly summarizes what we just found/did (from previous result)
+2. Introduces what we're about to do next
+Keep it to 1-2 sentences.`;
+                break;
+                
+            case 'final':
+                prompt += `\nAll ${input.totalSteps} steps completed.\n`;
+                prompt += `\nContext summary:\n${getContextSummary(input.context)}\n`;
+                prompt += `\nGenerate a brief summary with a SPECIFIC suggested follow-up action.`;
+                break;
+                
+            case 'error':
+                prompt += `\nError occurred: ${input.error}\n`;
+                prompt += `\nGenerate a friendly error message.`;
+                break;
         }
         
         return prompt;
     }
 
-    private getFallback(context: NarratorContext): string {
-        switch (context.messageType) {
+    /**
+     * Fallback messages for each type
+     */
+    private getFallback(type: NarratorMessageType): string {
+        switch (type) {
             case 'intro':
                 return "Let me analyze that for you...";
+            case 'step_complete':
+                return ""; // Silent for step completions
             case 'transition':
-                return "Moving on to the next step of the analysis...";
-            case 'summary':
-                return "Analysis complete. Let me know if you'd like to explore anything else.";
+                return "Moving to the next step...";
+            case 'final':
+                return "Analysis complete. What would you like to explore next?";
+            case 'error':
+                return "Something went wrong. Please try again.";
             default:
                 return "";
         }
@@ -144,4 +174,3 @@ Examples:
 }
 
 export const narratorTool = new NarratorToolWrapper();
-

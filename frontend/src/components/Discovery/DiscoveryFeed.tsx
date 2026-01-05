@@ -20,7 +20,7 @@ const DiscoveryFeed: React.FC<DiscoveryFeedProps> = ({ savedOnly = false, onNavi
 	const [filterPlatform, setFilterPlatform] = useState<string>("all");
 	const [filterStatus, setFilterStatus] = useState<string>("active");
 
-	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3001" : "";
+	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3002" : "";
 
 	useEffect(() => {
 		const fetchAds = async () => {

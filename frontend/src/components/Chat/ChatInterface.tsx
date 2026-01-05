@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { ArrowUp, Paperclip } from 'lucide-react';
 import { Message, StreamedSection, PlanTask } from '../../types';
 import StreamingMessage from './StreamingMessage';
+import PlanTimeline from './PlanTimeline';
 import { MessageContent } from '../../MessageContent';
 
 interface ChatInterfaceProps {
@@ -21,6 +22,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 }) => {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Extract current plan from streaming sections
+  const currentPlan = useMemo(() => {
+    const planSection = streamingSections.find(s => s.type === 'plan');
+    if (!planSection || planSection.type !== 'plan') return null;
+    
+    // Get the latest task states for this plan
+    const tasks = planStates.get(planSection.planId) || planSection.tasks;
+    return {
+      planId: planSection.planId,
+      agentName: planSection.agentName,
+      title: planSection.title,
+      tasks
+    };
+  }, [streamingSections, planStates]);
+
+  // Filter out plan sections for inline rendering (plan is shown sticky)
+  const nonPlanSections = useMemo(() => {
+    return streamingSections.filter(s => s.type !== 'plan');
+  }, [streamingSections]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -57,6 +78,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     <StreamingMessage 
                         sections={msg.sections} 
                         planStates={new Map()} // Completed messages don't need plan state updates
+                        hidePlan={true} // Don't show plan inline for completed messages
                     />
                 </div>
             );
@@ -70,8 +92,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         );
     };
 
+  // Determine if we should show the sticky plan
+  const showStickyPlan = isLoading && currentPlan && currentPlan.tasks.length > 0;
+
   return (
-    <div className="chat-interface">
+    <div className={`chat-interface ${showStickyPlan ? 'with-sticky-plan' : ''}`}>
+      {/* Sticky Plan Sidebar */}
+      {showStickyPlan && (
+        <PlanTimeline
+          planId={currentPlan.planId}
+          agentName={currentPlan.agentName}
+          title={currentPlan.title}
+          tasks={currentPlan.tasks}
+          isSticky={true}
+          isVisible={isLoading}
+        />
+      )}
+      
       <div className="chat-messages-area">
                 {messages.length === 0 && !isLoading && (
           <div className="empty-state-container">
@@ -81,10 +118,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <div className="cards-grid">
                 <button
                     className="suggested-card"
-                    onClick={() => handleSuggestedClick("Based on my current performance, which ads should I experiment more with, and why?")}
+                    onClick={() => handleSuggestedClick("Compare my top spend and top ROAS ads and formulate a winning formula")}
                 >
-                    <span className="card-title">Analyze my ad performance</span>
-                    <span className="card-subtitle">Which ads need more experimentation?</span>
+                    <span className="card-title">Compare top performers</span>
+                    <span className="card-subtitle">Find winning patterns across metrics</span>
                 </button>
                 <button
                     className="suggested-card"
@@ -95,10 +132,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 </button>
                 <button
                     className="suggested-card"
-                                    onClick={() => handleSuggestedClick("What patterns do my top creatives have in common?")}
+                                    onClick={() => handleSuggestedClick("Compare my top 3 and worst 3 ads and create insights")}
                 >
-                                    <span className="card-title">Find creative patterns</span>
-                                    <span className="card-subtitle">What makes winning ads work?</span>
+                                    <span className="card-title">Top vs Bottom analysis</span>
+                                    <span className="card-subtitle">What makes winners different from losers?</span>
                 </button>
                  <button
                     className="suggested-card"
@@ -115,12 +152,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 {/* Render completed messages */}
                 {messages.map((msg, index) => renderMessage(msg, index))}
 
-                {/* Render streaming sections during loading */}
-                {isLoading && streamingSections.length > 0 && (
+                {/* Render streaming sections during loading (without plan, shown sticky) */}
+                {isLoading && nonPlanSections.length > 0 && (
                     <div className="assistant-response streaming">
                         <StreamingMessage 
-                            sections={streamingSections} 
+                            sections={nonPlanSections} 
                             planStates={planStates}
+                            hidePlan={true}
                         />
                     </div>
                 )}

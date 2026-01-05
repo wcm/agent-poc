@@ -8,13 +8,14 @@ import FocusedItemsGrid from './FocusedItemsGrid';
 interface StreamingMessageProps {
     sections: StreamedSection[];
     planStates: Map<string, PlanTask[]>;  // Map of planId -> current task states
+    hidePlan?: boolean;  // Whether to hide plan sections (when shown sticky)
 }
 
 /**
  * StreamingMessage renders a collection of streamed sections
  * Each section type is rendered with its appropriate component
  */
-const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planStates }) => {
+const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planStates, hidePlan = false }) => {
     if (sections.length === 0) {
         return null;
     }
@@ -32,6 +33,9 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planState
                         );
                     
                     case 'plan':
+                        // Skip plan if hidePlan is true (shown in sticky sidebar instead)
+                        if (hidePlan) return null;
+                        
                         // Get the latest task states for this plan
                         const tasks = planStates.get(section.planId) || section.tasks;
                         return (
@@ -75,4 +79,3 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planState
 };
 
 export default StreamingMessage;
-
