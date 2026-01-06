@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState } from "react";
-import { ArrowUp, X } from "lucide-react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { ArrowUp, X, BarChart3, Sparkles, Eye, Compass, LucideIcon } from "lucide-react";
 import { Message, StreamedSection, PlanTask, Channel, Brand } from "../../types";
 import StreamingMessage from "./StreamingMessage";
 import ContextSelector from "./ContextSelector";
@@ -13,9 +13,124 @@ interface ChatInterfaceProps {
 	onSendMessage: (message: string, context?: { channel?: Channel; brands: Brand[] }) => void;
 }
 
+// Question categories with detailed prompts
+const SUGGESTED_QUESTIONS: Record<string, { title: string; icon: LucideIcon; questions: { title: string; summary: string; question: string }[] }> = {
+	ownPerformance: {
+		title: "Own Performance",
+		icon: BarChart3,
+		questions: [
+			{
+				title: "Top Performers",
+				summary: "See your best ads by ROAS",
+				question: "Show me my top performing ads sorted by ROAS. Include key metrics like spend, CTR, and impressions.",
+			},
+			{
+				title: "Video vs Image",
+				summary: "Compare ad format performance",
+				question: "Compare my video ads vs image ads performance. Which format drives better ROAS and engagement?",
+			},
+			{
+				title: "Winners vs Losers",
+				summary: "What separates best from worst",
+				question: "Compare my top 3 and worst 3 performing ads. Analyze what makes the winners successful and losers underperform.",
+			},
+			{
+				title: "Winning Formula",
+				summary: "Find patterns in top ads",
+				question: "Analyze my top spend ads vs top ROAS ads, deep dive into their creatives, and formulate a winning creative formula.",
+			},
+		],
+	},
+	creativeAnalysis: {
+		title: "Creative Analysis",
+		icon: Sparkles,
+		questions: [
+			{
+				title: "Best Creative",
+				summary: "Analyze your top ad creative",
+				question: "Analyze the creative of my best performing ad. What visual and copy elements make it work?",
+			},
+			{
+				title: "Success Patterns",
+				summary: "What makes top ads work",
+				question: "Analyze the creative patterns across my top 5 performing ads. What do they have in common?",
+			},
+			{
+				title: "Video Deep Dive",
+				summary: "Break down video ad hooks",
+				question: "Deep dive into my top video ad creatives. Analyze the hooks, messaging, and visual elements that drive engagement.",
+			},
+			{
+				title: "Creative Template",
+				summary: "Build a template from winners",
+				question: "Break down the creative elements of my top 3 performers and create a repeatable creative template I can use.",
+			},
+		],
+	},
+	competitorIntel: {
+		title: "Competitor Intel",
+		icon: Eye,
+		questions: [
+			{
+				title: "Top Competitors",
+				summary: "See trending competitor ads",
+				question: "Show me top competitor ads that are currently active. Analyze their key themes and strategies.",
+			},
+			{
+				title: "Brand Spotlight",
+				summary: "Analyze a specific brand",
+				question: "What campaigns is Adidas currently running? Analyze their creative approach and messaging.",
+			},
+			{
+				title: "Video Strategies",
+				summary: "Learn from competitor videos",
+				question: "Analyze competitor video ad strategies. What hooks and formats are they using that we can learn from?",
+			},
+			{
+				title: "Evergreen Ads",
+				summary: "Find long-running campaigns",
+				question: "Find the longest-running competitor campaigns and analyze why they've been successful over time.",
+			},
+		],
+	},
+	strategicInsights: {
+		title: "Strategic Insights",
+		icon: Compass,
+		questions: [
+			{
+				title: "Quick Compare",
+				summary: "How do I stack up",
+				question: "Give me a quick comparison of how my ads perform vs what competitors are running.",
+			},
+			{
+				title: "Gap Analysis",
+				summary: "What am I missing",
+				question: "Analyze competitor ads and identify creative approaches or formats I'm not currently using.",
+			},
+			{
+				title: "Beat Competition",
+				summary: "Learn from the best",
+				question: "Compare my top ads with Adidas' approach. Identify what they do better and opportunities for me.",
+			},
+			{
+				title: "Growth Strategy",
+				summary: "Full strategic roadmap",
+				question: "Based on my top performers and competitor insights, create a winning creative strategy with specific recommendations.",
+			},
+		],
+	},
+};
+
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, streamingSections, planStates, onSendMessage }) => {
 	const [input, setInput] = useState("");
 	const messagesEndRef = useRef<HTMLDivElement>(null);
+
+	// Callback ref that scrolls to top when empty state mounts
+	const emptyStateRef = useCallback((node: HTMLDivElement | null) => {
+		if (node) {
+			node.scrollTo({ top: 0, behavior: "auto" });
+		}
+	}, []);
 
 	// Context selection state
 	const [selectedChannels, setSelectedChannels] = useState<Channel[]>([]);
@@ -49,9 +164,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	};
 
+	const isEmptyState = messages.length === 0 && !isLoading;
+
 	useEffect(() => {
-		scrollToBottom();
-	}, [messages, streamingSections]);
+		if (!isEmptyState) {
+			scrollToBottom();
+		}
+	}, [messages, streamingSections, isEmptyState]);
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -118,8 +237,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 		);
 	};
 
-	const isEmptyState = messages.length === 0 && !isLoading;
-
 	// Input area component (reusable)
 	const renderInputArea = (isInline: boolean) => (
 		<div className={`chat-input-area ${isInline ? "inline" : "floating"}`}>
@@ -134,6 +251,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 								</button>
 							</span>
 						))}
+						{selectedChannels.length === 0 && (
+							<button className="tag-btn" onClick={() => setShowChannelSelector(true)}>
+								+ Channel
+							</button>
+						)}
 						{selectedBrands.map((brand) => (
 							<span key={brand.id} className="context-pill brand">
 								{brand.name}
@@ -142,11 +264,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 								</button>
 							</span>
 						))}
-						{selectedChannels.length === 0 && (
-							<button className="tag-btn" onClick={() => setShowChannelSelector(true)}>
-								+ Channel
-							</button>
-						)}
 						<button className="tag-btn" onClick={() => setShowBrandSelector(true)}>
 							+ Following Brand
 						</button>
@@ -164,58 +281,57 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 
 	return (
 		<div className="chat-interface">
-			<div className="chat-messages-area">
-				{isEmptyState && (
-					<div className="empty-state-container">
-						<h2 className="center-brand">Atria</h2>
-						{/* Inline input for empty state */}
-						{renderInputArea(true)}
-						<div className="suggested-questions-container">
-							<div className="cards-grid">
-								<button className="suggested-card" onClick={() => handleSuggestedClick("Compare my top spend and top ROAS ads and formulate a winning formula")}>
-									<span className="card-title">Compare top performers</span>
-									<span className="card-subtitle">Find winning patterns across metrics</span>
-								</button>
-								<button className="suggested-card" onClick={() => handleSuggestedClick("Why is my top ad performing so well? Deep dive into the creative.")}>
-									<span className="card-title">Deep dive into top performers</span>
-									<span className="card-subtitle">Why are my best ads performing well?</span>
-								</button>
-								<button className="suggested-card" onClick={() => handleSuggestedClick("Compare my top 3 and worst 3 ads and create insights")}>
-									<span className="card-title">Top vs Bottom analysis</span>
-									<span className="card-subtitle">What makes winners different from losers?</span>
-								</button>
-								<button className="suggested-card" onClick={() => handleSuggestedClick("Show me my video ad performance")}>
-									<span className="card-title">Video ad analysis</span>
-									<span className="card-subtitle">How are my video ads doing?</span>
-								</button>
-							</div>
+			{isEmptyState ? (
+				<div className="empty-state-container" ref={emptyStateRef}>
+					<h2 className="center-brand">Atria</h2>
+					{/* Inline input for empty state */}
+					{renderInputArea(true)}
+					<div className="suggested-questions-container">
+						{Object.values(SUGGESTED_QUESTIONS).map((category) => {
+							const IconComponent = category.icon;
+							return (
+								<div key={category.title} className="question-category">
+									<h3 className="category-title">
+										<IconComponent size={20} className="category-icon" />
+										{category.title}
+									</h3>
+									<div className="cards-grid">
+										{category.questions.map((q) => (
+											<button key={q.title} className="suggested-card" onClick={() => handleSuggestedClick(q.question)}>
+												<span className="card-title">{q.title}</span>
+												<span className="card-subtitle">{q.summary}</span>
+											</button>
+										))}
+									</div>
+								</div>
+							);
+						})}
+					</div>
+				</div>
+			) : (
+				<div className="chat-messages-area">
+					{/* Render completed messages */}
+					{messages.map((msg, index) => renderMessage(msg, index))}
+
+					{/* Render streaming sections during loading */}
+					{isLoading && streamingSections.length > 0 && (
+						<div className="assistant-response streaming">
+							<StreamingMessage sections={streamingSections} planStates={planStates} hidePlan={false} />
 						</div>
-					</div>
-				)}
+					)}
 
-				{/* Render completed messages */}
-				{messages.map((msg, index) => renderMessage(msg, index))}
+					{/* Loading indicator when no sections yet */}
+					{isLoading && streamingSections.length === 0 && (
+						<div className="loading-indicator">
+							<span className="loading-text">Thinking...</span>
+						</div>
+					)}
 
-				{/* Render streaming sections during loading */}
-				{isLoading && streamingSections.length > 0 && (
-					<div className="assistant-response streaming">
-						<StreamingMessage sections={streamingSections} planStates={planStates} hidePlan={false} />
-					</div>
-				)}
-
-				{/* Loading indicator when no sections yet */}
-				{isLoading && streamingSections.length === 0 && (
-					<div className="loading-indicator">
-						<span className="loading-text">Thinking...</span>
-					</div>
-				)}
-
-				<div ref={messagesEndRef} />
-			</div>
-
-			{/* Floating input for active chat */}
-			{!isEmptyState && renderInputArea(false)}
-
+					<div ref={messagesEndRef} />
+					{/* Floating input for active chat */}
+					{renderInputArea(false)}
+				</div>
+			)}
 			{/* Context Selector Popups */}
 			{showChannelSelector && <ContextSelector type="channel" selectedIds={selectedChannels.map((c) => c.id)} onSelect={handleChannelSelect} onClose={() => setShowChannelSelector(false)} />}
 			{showBrandSelector && <ContextSelector type="brand" selectedIds={selectedBrands.map((b) => b.id)} onSelect={handleBrandSelect} onClose={() => setShowBrandSelector(false)} />}
