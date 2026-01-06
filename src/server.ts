@@ -53,8 +53,8 @@ app.get('/api/stream', async (req: Request, res: Response) => {
     const channelId = (req.query.channelId as string) || 'channel_1';
     const sessionId = (req.query.sessionId as string) || 'default';
     
-    // Parse user-provided context (channels and brands)
-    let userContext: { channels?: any[]; brands?: any[] } | undefined;
+    // Parse user-provided context (channel and brands)
+    let userContext: { channel?: any; brands?: any[] } | undefined;
     if (req.query.context) {
         try {
             userContext = JSON.parse(req.query.context as string);

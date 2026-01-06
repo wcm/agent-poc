@@ -172,13 +172,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 		}
 	}, [messages, streamingSections, isEmptyState]);
 
+	// Get effective channel - use selected or first from cache as default
+	const getEffectiveChannel = () => {
+		return selectedChannels[0] || channelsCache[0] || undefined;
+	};
+
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!input.trim() || isLoading) return;
 
-		// Pass context with message
+		// Pass context with message - use default channel if none selected
 		const context = {
-			channel: selectedChannels[0],
+			channel: getEffectiveChannel(),
 			brands: selectedBrands,
 		};
 		onSendMessage(input, context);
@@ -187,7 +192,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 
 	const handleSuggestedClick = (text: string) => {
 		const context = {
-			channel: selectedChannels[0],
+			channel: getEffectiveChannel(),
 			brands: selectedBrands,
 		};
 		onSendMessage(text, context);
