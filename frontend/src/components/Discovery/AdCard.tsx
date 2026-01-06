@@ -62,24 +62,14 @@ const AdCard: React.FC<AdCardProps> = ({ ad, onBookmarkToggle, onBrandClick, sho
 	const runningTime = calculateRunningTime(ad.start_date, ad.end_date);
 
 	return (
-		<div className="ad-card">
-			<div className="ad-header">
-				<img
-					src={ad.brand_logo}
-					alt={ad.brand_name}
-					className="ad-brand-logo"
-					onClick={() => onBrandClick?.(ad.brand_id || "")}
-					style={{ cursor: onBrandClick ? "pointer" : "default" }}
-				/>
-				<div className="ad-header-text">
-					<span
-						className="ad-brand-name"
-						onClick={() => onBrandClick?.(ad.brand_id || "")}
-						style={{ cursor: onBrandClick ? "pointer" : "default" }}
-					>
+		<div className="feed-card">
+			<div className="feed-header">
+				<img src={ad.brand_logo} alt={ad.brand_name} className="feed-brand-logo" onClick={() => onBrandClick?.(ad.brand_id || "")} style={{ cursor: onBrandClick ? "pointer" : "default" }} />
+				<div className="feed-header-text">
+					<span className="feed-brand-name" onClick={() => onBrandClick?.(ad.brand_id || "")} style={{ cursor: onBrandClick ? "pointer" : "default" }}>
 						{ad.brand_name}
 					</span>
-					<div className="ad-meta-row">
+					<div className="feed-meta-row">
 						<span className={`status-badge ${ad.status}`}>{ad.status}</span>
 						{showRunningTime && (
 							<>
@@ -89,37 +79,33 @@ const AdCard: React.FC<AdCardProps> = ({ ad, onBookmarkToggle, onBrandClick, sho
 						)}
 					</div>
 				</div>
-				<button className="ad-menu-btn">
+				<button className="feed-menu-btn">
 					<MoreHorizontal size={16} />
 				</button>
 			</div>
 
-			<div className="ad-image-container">
+			<div className="feed-image-container">
 				{ad.display_format === "video" && (
 					<div className="video-badge">
 						<Play size={14} fill="white" color="white" />
 						<span>{ad.video_length}</span>
 					</div>
 				)}
-				<img src={ad.image_url} alt={ad.headline} className="ad-image" />
-				<div className="ad-overlay-platforms">
+				<img src={ad.image_url} alt={ad.headline} className="feed-image" />
+				<div className="feed-overlay-platforms">
 					{ad.platforms.map((p) => (
 						<PlatformIcon key={p} platform={p} />
 					))}
 				</div>
 			</div>
 
-			<div className="ad-content">
-				<div className="ad-headline">{ad.headline}</div>
-				<div className="ad-text">{ad.ad_copy}</div>
-				<div className="ad-footer">
-					<button className="ad-cta-btn">{ad.cta}</button>
-					<div className="ad-actions">
-						<button
-							className={`action-btn ${ad.is_bookmarked ? "active" : ""}`}
-							onClick={() => onBookmarkToggle(ad)}
-							title="Bookmark Ad"
-						>
+			<div className="feed-content">
+				<div className="feed-headline">{ad.headline}</div>
+				<div className="feed-text">{ad.ad_copy}</div>
+				<div className="feed-footer">
+					<button className="feed-cta-btn">{ad.cta}</button>
+					<div className="feed-actions">
+						<button className={`action-btn ${ad.is_bookmarked ? "active" : ""}`} onClick={() => onBookmarkToggle(ad)} title="Bookmark Ad">
 							<Bookmark size={18} fill={ad.is_bookmarked ? "currentColor" : "none"} />
 						</button>
 					</div>
@@ -130,4 +116,3 @@ const AdCard: React.FC<AdCardProps> = ({ ad, onBookmarkToggle, onBrandClick, sho
 };
 
 export default AdCard;
-

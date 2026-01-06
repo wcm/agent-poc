@@ -559,7 +559,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 									title={selectedAds.size > 0 ? "Clear selection" : `Select top ${MAX_CHART_ADS}`}
 								/>
 							</th>
-							<th className="ad-name-col">{GROUP_BY_OPTIONS.find((o) => o.value === groupBy)?.label || "Ad name"}</th>
+							<th className="item-name-col">{GROUP_BY_OPTIONS.find((o) => o.value === groupBy)?.label || "Ad name"}</th>
 							{selectedTableColumns.map((col) => (
 								<th key={col} onClick={() => handleSort(col)} className={sortBy === col ? "sorted" : ""}>
 									{METRIC_CONFIG[col]?.label}
@@ -588,10 +588,10 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 										title={!selectedAds.has(ad.id) && selectedAds.size >= MAX_CHART_ADS ? `Max ${MAX_CHART_ADS} ads can be selected` : ""}
 									/>
 								</td>
-								<td className="ad-name-col">
-									<div className="ad-name-cell">
+								<td className="item-name-col">
+									<div className="item-name-cell">
 										{showThumbnails && (
-											<div className="ad-thumbnail">
+											<div className="item-thumbnail">
 												<img src={ad.image_url} alt={ad.ad_name} />
 												{ad.display_format === "video" && (
 													<div className="video-indicator">
@@ -600,9 +600,9 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 												)}
 											</div>
 										)}
-										<div className="ad-info">
-											<span className="ad-name-text">{groupBy !== "ad_name" && ad.group_value ? ad.group_value : ad.ad_name}</span>
-											<span className="ad-count">
+										<div className="item-info">
+											<span className="item-name-text">{groupBy !== "ad_name" && ad.group_value ? ad.group_value : ad.ad_name}</span>
+											<span className="item-count">
 												{ad.ad_count || 1} ad{(ad.ad_count || 1) > 1 ? "s" : ""}
 											</span>
 										</div>

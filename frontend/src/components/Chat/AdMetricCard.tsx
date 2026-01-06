@@ -38,8 +38,8 @@ const AdMetricCard: React.FC<AdMetricCardProps> = ({ item, itemData, itemName })
 	const isVideo = displayFormat === "video";
 
 	return (
-		<div className="ad-metric-card">
-			<div className="ad-metric-card-thumbnail">
+		<div className="metric-card">
+			<div className="metric-card-thumbnail">
 				{thumbnail ? (
 					<>
 						<img src={thumbnail} alt={name} />
@@ -51,41 +51,41 @@ const AdMetricCard: React.FC<AdMetricCardProps> = ({ item, itemData, itemName })
 						)}
 					</>
 				) : (
-					<div className="ad-metric-card-placeholder">
+					<div className="metric-card-placeholder">
 						<ImageIcon size={24} />
 					</div>
 				)}
 			</div>
-			<div className="ad-metric-card-name" title={name}>
+			<div className="metric-card-name" title={name}>
 				{name}
 			</div>
-			<div className="ad-metric-card-metrics">
+			<div className="metric-card-metrics">
 				{metrics.cost_per_lead !== undefined && (
-					<div className="ad-metric-pill">
+					<div className="metric-pill">
 						<span className="metric-label">Cost per lead</span>
 						<span className="metric-value">{formatCurrency(metrics.cost_per_lead)}</span>
 					</div>
 				)}
 				{metrics.spend !== undefined && (
-					<div className="ad-metric-pill">
+					<div className="metric-pill">
 						<span className="metric-label">Spend</span>
 						<span className="metric-value">{formatCurrency(metrics.spend)}</span>
 					</div>
 				)}
 				{metrics.roas !== undefined && (
-					<div className="ad-metric-pill">
+					<div className="metric-pill">
 						<span className="metric-label">ROAS</span>
 						<span className="metric-value">{formatNumber(metrics.roas)}</span>
 					</div>
 				)}
 				{metrics.ctr !== undefined && (
-					<div className="ad-metric-pill">
+					<div className="metric-pill">
 						<span className="metric-label">CTR</span>
 						<span className="metric-value">{formatPercentage(metrics.ctr)}</span>
 					</div>
 				)}
 				{metrics.impressions !== undefined && (
-					<div className="ad-metric-pill">
+					<div className="metric-pill">
 						<span className="metric-label">Impressions</span>
 						<span className="metric-value">{formatNumber(metrics.impressions)}</span>
 					</div>

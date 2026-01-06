@@ -85,8 +85,9 @@ Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": { "display_fo
 Task: "Query worst performing ads"
 Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": {}, "sortBy": "roas", "sortOrder": "asc" }`
         });
-        // Use localhost for server-side calls
-        this.baseUrl = 'http://localhost:3002';
+        // Use localhost with dynamic port for server-side calls
+        const port = process.env.PORT || 3002;
+        this.baseUrl = `http://localhost:${port}`;
     }
 
     /**
