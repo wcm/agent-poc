@@ -1,5 +1,6 @@
 import { Tool } from '../tool-base';
 import { GlobalContext, DataSet, QueryParams, AdData, generateId } from '../context';
+import { ChannelInfo } from '../types';
 import { logger } from '../utils/logger';
 
 /**
@@ -196,7 +197,7 @@ Generate the query parameters.
             context.dataSets.push(dataSet);
 
             // 7. Generate confirmation message
-            const message = this.generateMessage(dataSet, queryParams);
+            const message = this.generateMessage(dataSet, queryParams, context.channel);
 
             return { dataSet, message };
 
@@ -209,12 +210,15 @@ Generate the query parameters.
     /**
      * Generate a comprehensive message about the query and results
      */
-    private generateMessage(dataSet: DataSet, queryParams: QueryParams): string {
+    private generateMessage(dataSet: DataSet, queryParams: QueryParams, channel: ChannelInfo): string {
         // const topItems = dataSet.data.slice(0, 3);
         const sortField = queryParams.sortBy || 'spend';
         const sortOrder = queryParams.sortOrder || 'desc';
         
         let message = `**Query Details:**\n`;
+        
+        // Channel info
+        message += `- Channel: ${channel.name} (${channel.platform})\n`;
         
         // Query parameters section
         message += `- Group by: ${queryParams.groupBy || 'ad_name'}\n`;

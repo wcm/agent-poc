@@ -52,6 +52,16 @@ app.get('/api/stream', async (req: Request, res: Response) => {
     const message = req.query.message as string;
     const channelId = (req.query.channelId as string) || 'channel_1';
     const sessionId = (req.query.sessionId as string) || 'default';
+    
+    // Parse user-provided context (channels and brands)
+    let userContext: { channels?: any[]; brands?: any[] } | undefined;
+    if (req.query.context) {
+        try {
+            userContext = JSON.parse(req.query.context as string);
+        } catch (e) {
+            logger.log('WARN', { component: 'Server', action: 'PARSE_CONTEXT' }, 'Failed to parse context');
+        }
+    }
 
     if (!message) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: "Message required" })}\n\n`);
@@ -70,7 +80,7 @@ app.get('/api/stream', async (req: Request, res: Response) => {
 
     try {
         // handleRequest streams events and returns void
-        await agent.handleRequest(message, channelId);
+        await agent.handleRequest(message, channelId, userContext);
     } catch (error: any) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
         res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
@@ -285,6 +295,13 @@ app.post('/api/brands/:id/follow', async (req: Request, res: Response) => {
 });
 
 // Get Discovery Ads - Join with brand info from other-brands.json
+// Supports query params:
+// - brand: filter by brand name
+// - display_format: filter by 'video' or 'image'
+// - status: filter by 'active' or 'inactive'
+// - platform: filter by platform name (instagram, facebook, tiktok, youtube)
+// - sort: 'latest' (default) or 'longest_running'
+// - limit: number of results to return (default: all)
 app.get('/api/inspirations/discovery', async (req: Request, res: Response) => {
     try {
         const [ads, brands] = await Promise.all([
@@ -298,7 +315,7 @@ app.get('/api/inspirations/discovery', async (req: Request, res: Response) => {
         );
         
         // Join brand info into each ad
-        const enrichedAds = ads.map((ad: any) => {
+        let enrichedAds = ads.map((ad: any) => {
             const brand = brandMap.get(ad.brand_id);
             return {
                 ...ad,
@@ -306,6 +323,57 @@ app.get('/api/inspirations/discovery', async (req: Request, res: Response) => {
                 brand_logo: brand?.logo || ''
             };
         });
+
+        // Extract query params
+        const brandFilter = req.query.brand as string | undefined;
+        const displayFormat = req.query.display_format as string | undefined;
+        const status = req.query.status as string | undefined;
+        const platform = req.query.platform as string | undefined;
+        const sort = (req.query.sort as string) || 'latest';
+        const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+
+        // Apply filters
+        if (brandFilter && brandFilter !== 'all') {
+            enrichedAds = enrichedAds.filter((ad: any) => ad.brand_name === brandFilter);
+        }
+        if (displayFormat && displayFormat !== 'all') {
+            enrichedAds = enrichedAds.filter((ad: any) => ad.display_format === displayFormat);
+        }
+        if (status && status !== 'all') {
+            enrichedAds = enrichedAds.filter((ad: any) => ad.status === status);
+        }
+        if (platform && platform !== 'all') {
+            enrichedAds = enrichedAds.filter((ad: any) => 
+                ad.platforms && ad.platforms.includes(platform.toLowerCase())
+            );
+        }
+
+        // Apply sorting
+        if (sort === 'longest_running') {
+            // Calculate running days: from start_date to end_date (or today if still active)
+            const today = new Date();
+            enrichedAds = enrichedAds.sort((a: any, b: any) => {
+                const aStart = new Date(a.start_date);
+                const aEnd = a.end_date ? new Date(a.end_date) : today;
+                const aDays = Math.floor((aEnd.getTime() - aStart.getTime()) / (1000 * 60 * 60 * 24));
+                
+                const bStart = new Date(b.start_date);
+                const bEnd = b.end_date ? new Date(b.end_date) : today;
+                const bDays = Math.floor((bEnd.getTime() - bStart.getTime()) / (1000 * 60 * 60 * 24));
+                
+                return bDays - aDays; // Longest running first
+            });
+        } else {
+            // 'latest' - most recent first
+            enrichedAds = enrichedAds.sort((a: any, b: any) => 
+                new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+            );
+        }
+
+        // Apply limit
+        if (limit && limit > 0) {
+            enrichedAds = enrichedAds.slice(0, limit);
+        }
         
         res.json(enrichedAds);
     } catch (error) {

@@ -5,6 +5,7 @@ import {
     GlobalContext, 
     Plan, 
     PlanStep,
+    UserContext,
     createEmptyContext, 
     addToHistory,
     generateId
@@ -18,6 +19,7 @@ import {
 import { guardrailTool } from './tools/guardrail';
 import { plannerTool } from './tools/planner';
 import { dataQueryTool } from './tools/data-query';
+import { discoveryQueryTool } from './tools/discovery-query';
 import { dataAnalysisTool } from './tools/data-analysis';
 import { focusItemsTool } from './tools/focus-items';
 import { creativeInsightsTool } from './tools/creative-insights';
@@ -99,19 +101,31 @@ export class Agent extends EventEmitter {
     /**
      * Main request handler
      */
-    async handleRequest(userInput: string, channelId: string): Promise<void> {
+    async handleRequest(userInput: string, channelId: string, userContext?: UserContext): Promise<void> {
         logger.separator('NEW REQUEST');
-        logger.agentStart('Agent', { userInput, channelId });
+        logger.agentStart('Agent', { userInput, channelId, userContext });
 
         try {
-            // Initialize/update channel context
-            const channel = this.getChannelInfo(channelId);
-            if (!this.initialized || this.context.channel.id !== channelId) {
-                this.context = createEmptyContext(channel, userInput);
+            // Determine the active channel - user selection takes priority
+            let activeChannel: ChannelInfo;
+            if (userContext?.channel) {
+                activeChannel = userContext.channel;
+                logger.debug('Agent', 'Using user-selected channel', { channelId: activeChannel.id });
+            } else {
+                activeChannel = this.getChannelInfo(channelId);
+            }
+
+            // Initialize/update context
+            if (!this.initialized || this.context.channel.id !== activeChannel.id) {
+                this.context = createEmptyContext(activeChannel, userInput, userContext);
                 this.initialized = true;
             } else {
                 this.context.userInput = userInput;
-                this.context.channel = channel;
+                this.context.channel = activeChannel;
+                // Update followed brands if provided
+                if (userContext?.brands) {
+                    this.context.followedBrands = userContext.brands;
+                }
             }
 
             // Step 1: Guardrail check
@@ -310,6 +324,12 @@ export class Agent extends EventEmitter {
         switch (step.tool) {
             case 'dataQuery': {
                 const result = await dataQueryTool.execute(step.description, this.context);
+                this.stream({ type: 'text', content: result.message });
+                return result.message;
+            }
+
+            case 'discoveryQuery': {
+                const result = await discoveryQueryTool.execute(step.description, this.context);
                 this.stream({ type: 'text', content: result.message });
                 return result.message;
             }

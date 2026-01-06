@@ -1,5 +1,5 @@
 import { Tool } from '../tool-base';
-import { GlobalContext, AnalysisReport, getLatestDataSet, generateId } from '../context';
+import { GlobalContext, AnalysisReport, getLatestDataSet, getLatestAnyDataSet, isDiscoveryAd, generateId } from '../context';
 import { logger } from '../utils/logger';
 
 /**
@@ -58,22 +58,59 @@ Keep the report concise and focused on actionable insights.`
     async execute(stepDescription: string, context: GlobalContext): Promise<DataAnalysisResult> {
         logger.debug('DataAnalysisTool', 'Analyzing data', { stepDescription });
 
-        const dataSet = getLatestDataSet(context);
-        if (!dataSet) {
-            throw new Error('No data available for analysis. Run dataQuery first.');
+        const latestData = getLatestAnyDataSet(context);
+        if (!latestData) {
+            throw new Error('No data available for analysis. Run dataQuery or discoveryQuery first.');
         }
 
-        // Prepare data for analysis
-        const dataPreview = dataSet.data.slice(0, 10).map(item => ({
-            name: item.ad_name || item.group_value || item.creative_name || 'Unknown',
-            format: item.display_format || 'unknown',
-            spend: item.metrics.spend,
-            roas: item.metrics.roas,
-            ctr: item.metrics.ctr,
-            cpc: item.metrics.cpc,
-            impressions: item.metrics.impressions,
-            clicks: item.metrics.clicks
-        }));
+        const { dataSet, type } = latestData;
+        let dataPreview: any[];
+        let dataSummary: string;
+
+        if (type === 'discovery') {
+            // Discovery ads - no metrics, focus on creative elements
+            dataPreview = (dataSet.data as any[]).slice(0, 10).map(item => ({
+                brand: item.brand_name,
+                headline: item.headline,
+                ad_copy: item.ad_copy?.substring(0, 100) + '...',
+                cta: item.cta,
+                format: item.display_format,
+                platforms: item.platforms?.join(', '),
+                status: item.status,
+                start_date: item.start_date
+            }));
+            dataSummary = `
+## DATA SUMMARY (COMPETITOR ADS)
+- Total items: ${dataSet.data.length}
+- Query: ${dataSet.queryDescription}
+- Data Type: Competitor/Inspiration Ads (no performance metrics)
+- Filters: ${JSON.stringify((dataSet as any).queryParams || {})}
+
+NOTE: This is competitor ad data. Focus on:
+- Creative themes and messaging patterns
+- Brand positioning and value propositions
+- CTA strategies
+- Platform preferences
+- Campaign longevity`;
+        } else {
+            // Own ads - has metrics
+            dataPreview = (dataSet.data as any[]).slice(0, 10).map(item => ({
+                name: item.ad_name || item.group_value || item.creative_name || 'Unknown',
+                format: item.display_format || 'unknown',
+                spend: item.metrics?.spend,
+                roas: item.metrics?.roas,
+                ctr: item.metrics?.ctr,
+                cpc: item.metrics?.cpc,
+                impressions: item.metrics?.impressions,
+                clicks: item.metrics?.clicks
+            }));
+            dataSummary = `
+## DATA SUMMARY (YOUR ADS)
+- Total items: ${dataSet.data.length}
+- Query: ${dataSet.queryDescription}
+- Sorted by: ${(dataSet as any).queryParams?.sortBy || 'default'}
+- Filters: ${JSON.stringify((dataSet as any).queryParams?.filters || {})}`;
+        }
 
         const input = `
 ## ANALYSIS TASK
@@ -82,11 +119,7 @@ ${stepDescription}
 ## USER'S ORIGINAL REQUEST
 ${context.userInput}
 
-## DATA SUMMARY
-- Total items: ${dataSet.data.length}
-- Query: ${dataSet.queryDescription}
-- Sorted by: ${dataSet.queryParams.sortBy || 'default'}
-- Filters: ${JSON.stringify(dataSet.queryParams.filters || {})}
+${dataSummary}
 
 ## DATA (Top ${dataPreview.length} items)
 ${JSON.stringify(dataPreview, null, 2)}

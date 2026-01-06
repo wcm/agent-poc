@@ -67,10 +67,10 @@ class CreativeInsightsToolWrapper {
                         thumbnail: item.thumbnail,
                         displayFormat: item.displayFormat,
                         metrics: {
-                            roas: item.metrics.roas,
-                            spend: item.metrics.spend,
-                            ctr: item.metrics.ctr,
-                            impressions: item.metrics.impressions
+                            roas: item.metrics?.roas,
+                            spend: item.metrics?.spend,
+                            ctr: item.metrics?.ctr,
+                            impressions: item.metrics?.impressions
                         }
                     }
                 });
@@ -98,18 +98,25 @@ class CreativeInsightsToolWrapper {
         let extractedContent: string | null = null;
         let contentType: 'image' | 'video' | null = null;
 
+        // Check if this is a competitor ad (no metrics)
+        const isCompetitorAd = !item.metrics || Object.keys(item.metrics).length === 0;
+
         // Step 1: Extract visual content based on format
         if (item.type === 'ad' || item.type === 'creative') {
             if (item.displayFormat === 'video') {
                 // Generate video transcript
-                const transcriptInput = `
+                let transcriptInput = `
 Ad/Creative Name: ${item.name}
 Type: ${item.type}
 Format: Video
-Metrics: ROAS ${item.metrics.roas?.toFixed(2)}, Spend $${item.metrics.spend?.toFixed(0)}, CTR ${(item.metrics.ctr || 0).toFixed(2)}%
-
-Generate a plausible video ad script for this creative.
 `;
+                if (!isCompetitorAd && item.metrics?.roas) {
+                    transcriptInput += `Metrics: ROAS ${item.metrics.roas?.toFixed(2)}, Spend $${item.metrics.spend?.toFixed(0)}, CTR ${(item.metrics.ctr || 0).toFixed(2)}%`;
+                } else {
+                    transcriptInput += `This is a COMPETITOR AD - focus on creative elements, messaging, and strategy.`;
+                }
+                transcriptInput += `\n\nGenerate a plausible video ad script for this creative.`;
+                
                 extractedContent = await videoTranscriptTool.process(transcriptInput);
                 contentType = 'video';
                 
@@ -117,14 +124,14 @@ Generate a plausible video ad script for this creative.
                 // Extract image content
                 extractedContent = await imageExtractionTool.extractFromUrl(
                     item.thumbnail,
-                    `Ad/Creative Name: ${item.name}, Type: ${item.type}`
+                    `Ad/Creative Name: ${item.name}, Type: ${item.type}${isCompetitorAd ? ' (COMPETITOR AD)' : ''}`
                 );
                 contentType = 'image';
             }
         }
 
         // Step 2: Run creative analysis
-        const analysisInput = this.buildAnalysisInput(item, extractedContent, contentType, stepDescription, context.userInput);
+        const analysisInput = this.buildAnalysisInput(item, extractedContent, contentType, stepDescription, context.userInput, isCompetitorAd);
         const analysisMarkdown = await creativeAnalysisTool.process(analysisInput);
 
         // Step 3: Format the full report
@@ -148,26 +155,40 @@ Generate a plausible video ad script for this creative.
         extractedContent: string | null,
         contentType: 'image' | 'video' | null,
         stepDescription: string,
-        userInput: string
+        userInput: string,
+        isCompetitorAd: boolean = false
     ): string {
         let input = `
 ## ITEM INFORMATION
 - **Name**: ${item.name}
-- **Type**: ${item.type}
+- **Type**: ${item.type}${isCompetitorAd ? ' (COMPETITOR AD)' : ''}
 - **Format**: ${item.displayFormat || 'text'}
+`;
 
+        if (isCompetitorAd) {
+            input += `
+## NOTE
+This is a COMPETITOR AD - no performance metrics available.
+Focus your analysis on:
+- Creative strategy and messaging approach
+- Visual elements and brand positioning
+- Call-to-action effectiveness
+- What we can learn and apply to our own ads
+`;
+        } else {
+            input += `
 ## PERFORMANCE METRICS
-- ROAS: ${item.metrics.roas?.toFixed(2) || 'N/A'}
-- Spend: $${item.metrics.spend?.toFixed(0) || 'N/A'}
-- CTR: ${item.metrics.ctr?.toFixed(2) || 'N/A'}%
-- Impressions: ${item.metrics.impressions?.toLocaleString() || 'N/A'}
-- CPC: $${item.metrics.cpc?.toFixed(2) || 'N/A'}
+- ROAS: ${item.metrics?.roas?.toFixed(2) || 'N/A'}
+- Spend: $${item.metrics?.spend?.toFixed(0) || 'N/A'}
+- CTR: ${item.metrics?.ctr?.toFixed(2) || 'N/A'}%
+- Impressions: ${item.metrics?.impressions?.toLocaleString() || 'N/A'}
+- CPC: $${item.metrics?.cpc?.toFixed(2) || 'N/A'}
+`;
+        }
 
+        input += `
 ## ANALYSIS OBJECTIVE
 ${stepDescription}
-
-## USER'S ORIGINAL REQUEST
-${userInput}
 `;
 
         if (extractedContent && contentType === 'image') {

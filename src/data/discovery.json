@@ -7,7 +7,10 @@
         "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Now",
         "display_format": "image",
-        "platforms": ["instagram", "facebook"],
+        "platforms": [
+            "instagram",
+            "facebook"
+        ],
         "status": "active",
         "start_date": "2025-12-28",
         "end_date": null,
@@ -21,7 +24,10 @@
         "image_url": "https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Samba",
         "display_format": "image",
-        "platforms": ["instagram", "tiktok"],
+        "platforms": [
+            "instagram",
+            "tiktok"
+        ],
         "status": "active",
         "start_date": "2025-12-20",
         "end_date": null,
@@ -36,7 +42,10 @@
         "cta": "Learn More",
         "display_format": "video",
         "video_length": "0:30",
-        "platforms": ["youtube", "facebook"],
+        "platforms": [
+            "youtube",
+            "facebook"
+        ],
         "status": "active",
         "start_date": "2025-12-15",
         "end_date": null,
@@ -50,7 +59,10 @@
         "image_url": "https://images.unsplash.com/photo-1511886929837-354d827aae26?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Football",
         "display_format": "image",
-        "platforms": ["facebook", "instagram"],
+        "platforms": [
+            "facebook",
+            "instagram"
+        ],
         "status": "active",
         "start_date": "2025-12-22",
         "end_date": null,
@@ -65,7 +77,10 @@
         "cta": "Shop Training",
         "display_format": "video",
         "video_length": "0:20",
-        "platforms": ["tiktok", "instagram"],
+        "platforms": [
+            "tiktok",
+            "instagram"
+        ],
         "status": "active",
         "start_date": "2025-12-18",
         "end_date": null,
@@ -79,7 +94,10 @@
         "image_url": "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Winter",
         "display_format": "image",
-        "platforms": ["facebook", "instagram"],
+        "platforms": [
+            "facebook",
+            "instagram"
+        ],
         "status": "inactive",
         "start_date": "2025-11-01",
         "end_date": "2025-11-30",
@@ -93,7 +111,10 @@
         "image_url": "https://images.unsplash.com/photo-1556906781-9a412961c28c?w=800&auto=format&fit=crop&q=60",
         "cta": "Join Free",
         "display_format": "image",
-        "platforms": ["instagram", "facebook"],
+        "platforms": [
+            "instagram",
+            "facebook"
+        ],
         "status": "active",
         "start_date": "2025-12-01",
         "end_date": null,
@@ -107,7 +128,10 @@
         "image_url": "https://images.unsplash.com/photo-1600269452121-4f2416e55c28?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Gazelle",
         "display_format": "image",
-        "platforms": ["tiktok", "instagram"],
+        "platforms": [
+            "tiktok",
+            "instagram"
+        ],
         "status": "active",
         "start_date": "2025-12-25",
         "end_date": null,
@@ -122,7 +146,10 @@
         "cta": "Shop Basketball",
         "display_format": "video",
         "video_length": "0:25",
-        "platforms": ["youtube", "tiktok"],
+        "platforms": [
+            "youtube",
+            "tiktok"
+        ],
         "status": "active",
         "start_date": "2025-12-10",
         "end_date": null,
@@ -136,7 +163,11 @@
         "image_url": "https://images.unsplash.com/photo-1460353581641-37baddab0fa2?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Sale",
         "display_format": "image",
-        "platforms": ["facebook", "instagram", "tiktok"],
+        "platforms": [
+            "facebook",
+            "instagram",
+            "tiktok"
+        ],
         "status": "inactive",
         "start_date": "2025-11-20",
         "end_date": "2025-12-02",
@@ -150,7 +181,10 @@
         "image_url": "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=800&auto=format&fit=crop&q=60",
         "cta": "Discover",
         "display_format": "image",
-        "platforms": ["instagram", "facebook"],
+        "platforms": [
+            "instagram",
+            "facebook"
+        ],
         "status": "active",
         "start_date": "2025-12-26",
         "end_date": null,
@@ -165,7 +199,10 @@
         "cta": "Shop Now",
         "display_format": "video",
         "video_length": "0:30",
-        "platforms": ["youtube", "tiktok"],
+        "platforms": [
+            "youtube",
+            "tiktok"
+        ],
         "status": "active",
         "start_date": "2025-12-20",
         "end_date": null,
@@ -179,7 +216,10 @@
         "image_url": "https://images.unsplash.com/photo-1551107696-a4b0c5a0d9a2?w=800&auto=format&fit=crop&q=60",
         "cta": "Explore",
         "display_format": "image",
-        "platforms": ["instagram", "facebook"],
+        "platforms": [
+            "instagram",
+            "facebook"
+        ],
         "status": "active",
         "start_date": "2025-12-15",
         "end_date": null,
@@ -193,7 +233,10 @@
         "image_url": "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Roger",
         "display_format": "image",
-        "platforms": ["instagram", "tiktok"],
+        "platforms": [
+            "instagram",
+            "tiktok"
+        ],
         "status": "active",
         "start_date": "2025-12-22",
         "end_date": null,
@@ -208,7 +251,10 @@
         "cta": "Shop Trail",
         "display_format": "video",
         "video_length": "0:20",
-        "platforms": ["youtube", "facebook"],
+        "platforms": [
+            "youtube",
+            "facebook"
+        ],
         "status": "active",
         "start_date": "2025-12-18",
         "end_date": null,
@@ -222,7 +268,10 @@
         "image_url": "https://images.unsplash.com/photo-1556906781-9a412961c28c?w=800&auto=format&fit=crop&q=60",
         "cta": "Learn More",
         "display_format": "image",
-        "platforms": ["facebook", "instagram"],
+        "platforms": [
+            "facebook",
+            "instagram"
+        ],
         "status": "active",
         "start_date": "2025-12-08",
         "end_date": null,
@@ -236,7 +285,10 @@
         "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Lifestyle",
         "display_format": "image",
-        "platforms": ["instagram", "tiktok"],
+        "platforms": [
+            "instagram",
+            "tiktok"
+        ],
         "status": "active",
         "start_date": "2025-12-30",
         "end_date": null,
@@ -250,7 +302,10 @@
         "image_url": "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Apparel",
         "display_format": "image",
-        "platforms": ["facebook", "instagram"],
+        "platforms": [
+            "facebook",
+            "instagram"
+        ],
         "status": "inactive",
         "start_date": "2025-11-05",
         "end_date": "2025-11-25",
@@ -265,7 +320,10 @@
         "cta": "Join Free",
         "display_format": "video",
         "video_length": "0:15",
-        "platforms": ["tiktok", "instagram"],
+        "platforms": [
+            "tiktok",
+            "instagram"
+        ],
         "status": "active",
         "start_date": "2025-12-12",
         "end_date": null,
@@ -279,7 +337,10 @@
         "image_url": "https://images.unsplash.com/photo-1579338559194-a162d19bf842?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Gifts",
         "display_format": "image",
-        "platforms": ["facebook", "instagram"],
+        "platforms": [
+            "facebook",
+            "instagram"
+        ],
         "status": "inactive",
         "start_date": "2025-11-15",
         "end_date": "2025-12-25",
@@ -293,11 +354,14 @@
         "image_url": "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Align",
         "display_format": "image",
-        "platforms": ["instagram", "facebook"],
+        "platforms": [
+            "instagram",
+            "facebook"
+        ],
         "status": "active",
         "start_date": "2025-12-27",
         "end_date": null,
-        "is_bookmarked": true
+        "is_bookmarked": false
     },
     {
         "id": "ad_022",
@@ -308,7 +372,10 @@
         "cta": "Shop Define",
         "display_format": "video",
         "video_length": "0:25",
-        "platforms": ["youtube", "instagram"],
+        "platforms": [
+            "youtube",
+            "instagram"
+        ],
         "status": "active",
         "start_date": "2025-12-20",
         "end_date": null,
@@ -322,7 +389,10 @@
         "image_url": "https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Men's",
         "display_format": "image",
-        "platforms": ["facebook", "instagram"],
+        "platforms": [
+            "facebook",
+            "instagram"
+        ],
         "status": "active",
         "start_date": "2025-12-15",
         "end_date": null,
@@ -336,7 +406,10 @@
         "image_url": "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Wunder",
         "display_format": "image",
-        "platforms": ["instagram", "tiktok"],
+        "platforms": [
+            "instagram",
+            "tiktok"
+        ],
         "status": "active",
         "start_date": "2025-12-22",
         "end_date": null,
@@ -351,7 +424,10 @@
         "cta": "Shop Scuba",
         "display_format": "video",
         "video_length": "0:20",
-        "platforms": ["tiktok", "instagram"],
+        "platforms": [
+            "tiktok",
+            "instagram"
+        ],
         "status": "active",
         "start_date": "2025-12-18",
         "end_date": null,
@@ -365,7 +441,10 @@
         "image_url": "https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Running",
         "display_format": "image",
-        "platforms": ["facebook", "youtube"],
+        "platforms": [
+            "facebook",
+            "youtube"
+        ],
         "status": "active",
         "start_date": "2025-12-10",
         "end_date": null,
@@ -379,7 +458,10 @@
         "image_url": "https://images.unsplash.com/photo-1599447421416-3414500d18a5?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Accessories",
         "display_format": "image",
-        "platforms": ["instagram", "facebook"],
+        "platforms": [
+            "instagram",
+            "facebook"
+        ],
         "status": "active",
         "start_date": "2025-12-29",
         "end_date": null,
@@ -394,7 +476,10 @@
         "cta": "Join Class",
         "display_format": "video",
         "video_length": "0:30",
-        "platforms": ["youtube", "tiktok"],
+        "platforms": [
+            "youtube",
+            "tiktok"
+        ],
         "status": "active",
         "start_date": "2025-12-05",
         "end_date": null,
@@ -408,7 +493,10 @@
         "image_url": "https://images.unsplash.com/photo-1483721310020-03333e577078?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Sale",
         "display_format": "image",
-        "platforms": ["instagram", "facebook"],
+        "platforms": [
+            "instagram",
+            "facebook"
+        ],
         "status": "inactive",
         "start_date": "2025-11-10",
         "end_date": "2025-11-30",
@@ -422,7 +510,11 @@
         "image_url": "https://images.unsplash.com/photo-1593164842264-854604db2260?w=800&auto=format&fit=crop&q=60",
         "cta": "Join Free",
         "display_format": "image",
-        "platforms": ["facebook", "instagram", "tiktok"],
+        "platforms": [
+            "facebook",
+            "instagram",
+            "tiktok"
+        ],
         "status": "active",
         "start_date": "2025-12-01",
         "end_date": null,
@@ -436,7 +528,10 @@
         "image_url": "https://images.unsplash.com/photo-1607962837359-5e7e89f86776?w=800&auto=format&fit=crop&q=60",
         "cta": "Shop Gifts",
         "display_format": "image",
-        "platforms": ["instagram", "facebook"],
+        "platforms": [
+            "instagram",
+            "facebook"
+        ],
         "status": "inactive",
         "start_date": "2025-11-20",
         "end_date": "2025-12-26",

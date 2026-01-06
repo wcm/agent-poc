@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Sidebar, { Channel } from "../Sidebar/Sidebar";
 import ChatInterface from "../Chat/ChatInterface";
-import { Message, Session, SessionContext, StreamedSection, PlanTask, SSEEvent, PlanEvent, PlanStatusEvent } from "../../types";
+import { Message, Session, SessionContext, StreamedSection, PlanTask, SSEEvent, PlanEvent, PlanStatusEvent, Channel as ContextChannel, Brand } from "../../types";
 import DiscoveryFeed from "../Discovery/DiscoveryFeed";
 import FollowingBrands from "../Discovery/FollowingBrands";
 import BrandDetails from "../Discovery/BrandDetails";
@@ -246,7 +246,7 @@ const MainLayout: React.FC = () => {
 		}
 	}, []);
 
-	const handleSendMessage = async (content: string) => {
+	const handleSendMessage = async (content: string, context?: { channel?: ContextChannel; brands: Brand[] }) => {
 		// 1. Prepare User Message
 		const userMessage: Message = { role: "user", content };
 
@@ -287,7 +287,18 @@ const MainLayout: React.FC = () => {
 		// 4. Start SSE streaming
 		const channelParam = activeChannelId ? `&channelId=${encodeURIComponent(activeChannelId)}` : "";
 		const sessionParam = `&sessionId=${encodeURIComponent(currentSessionId)}`;
-		const apiUrl = `${baseUrl}/api/stream?message=${encodeURIComponent(content)}${channelParam}${sessionParam}`;
+
+		// Build context params
+		let contextParam = "";
+		if (context) {
+			const contextData = {
+				channel: context.channel,
+				brands: context.brands,
+			};
+			contextParam = `&context=${encodeURIComponent(JSON.stringify(contextData))}`;
+		}
+
+		const apiUrl = `${baseUrl}/api/stream?message=${encodeURIComponent(content)}${channelParam}${sessionParam}${contextParam}`;
 
 		const eventSource = new EventSource(apiUrl);
 		const sessionId = currentSessionId; // Capture for closure

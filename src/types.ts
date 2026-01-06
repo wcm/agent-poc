@@ -10,6 +10,19 @@ export interface ChannelInfo {
 }
 
 /**
+ * Brand Info - Followed brand data
+ */
+export interface BrandInfo {
+    id: string;
+    name: string;
+    logo?: string;
+    category?: string;
+    description?: string;
+    website?: string;
+    is_followed: boolean;
+}
+
+/**
  * SSE Event Types - Sent from server to frontend
  */
 

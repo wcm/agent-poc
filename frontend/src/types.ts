@@ -192,6 +192,17 @@ export interface AgentOutputSection {
 }
 
 /**
+ * Channel type for ad accounts
+ */
+export interface Channel {
+    id: string;
+    name: string;
+    platform: string;
+    account_id: string;
+    is_connected: boolean;
+}
+
+/**
  * Brand and Ad types
  */
 export interface Brand {

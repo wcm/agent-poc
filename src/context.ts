@@ -1,4 +1,4 @@
-import { ChannelInfo, FocusedItemCard, TaskStatus } from './types';
+import { ChannelInfo, FocusedItemCard, TaskStatus, BrandInfo } from './types';
 
 /**
  * Query parameters for data fetching
@@ -60,6 +60,49 @@ export interface DataSet {
 }
 
 /**
+ * Discovery ad data structure from the API
+ */
+export interface DiscoveryAd {
+    id: string;
+    brand_id: string;
+    brand_name: string;
+    brand_logo: string;
+    headline: string;
+    ad_copy: string;
+    image_url: string;
+    cta: string;
+    display_format: 'image' | 'video';
+    video_length?: string;
+    platforms: string[];
+    status: 'active' | 'inactive';
+    start_date: string;
+    end_date: string | null;
+    is_bookmarked: boolean;
+}
+
+/**
+ * Discovery query parameters
+ */
+export interface DiscoveryQueryParams {
+    brand?: string;
+    display_format?: 'video' | 'image';
+    status?: 'active' | 'inactive';
+    platform?: string;
+    sort?: 'latest' | 'longest_running';
+}
+
+/**
+ * Dataset stored in context from discoveryQuery tool
+ */
+export interface DiscoveryDataSet {
+    id: string;
+    queryDescription: string;
+    queryParams: DiscoveryQueryParams;
+    data: DiscoveryAd[];
+    timestamp: number;
+}
+
+/**
  * Analysis report from dataAnalysis tool
  */
 export interface AnalysisReport {
@@ -106,7 +149,7 @@ export interface ConsolidationReport {
  */
 export interface PlanStep {
     id: string;
-    tool: 'dataQuery' | 'dataAnalysis' | 'focusItems' | 'creativeInsights' | 'consolidateFindings';
+    tool: 'dataQuery' | 'dataAnalysis' | 'focusItems' | 'creativeInsights' | 'consolidateFindings' | 'discoveryQuery';
     description: string;
     status: TaskStatus;
 }
@@ -125,14 +168,20 @@ export interface Plan {
  * Global Context - the single source of truth for the agent
  */
 export interface GlobalContext {
-    // Channel data (initialized on start)
+    // Active channel (user-selected or default)
     channel: ChannelInfo;
+    
+    // User-selected followed brands (from context selector)
+    followedBrands: BrandInfo[];
     
     // User's original input
     userInput: string;
     
     // Data from dataQuery tool (can have multiple datasets)
     dataSets: DataSet[];
+    
+    // Data from discoveryQuery tool (competitor ads)
+    discoveryDataSets: DiscoveryDataSet[];
     
     // Analysis reports from dataAnalysis
     analysisReports: AnalysisReport[];
@@ -157,13 +206,23 @@ export interface GlobalContext {
 }
 
 /**
+ * User-provided context from the frontend
+ */
+export interface UserContext {
+    channel?: ChannelInfo;
+    brands?: BrandInfo[];
+}
+
+/**
  * Create an empty GlobalContext with default values
  */
-export function createEmptyContext(channel: ChannelInfo, userInput: string = ''): GlobalContext {
+export function createEmptyContext(channel: ChannelInfo, userInput: string = '', userContext?: UserContext): GlobalContext {
     return {
         channel,
+        followedBrands: userContext?.brands || [],
         userInput,
         dataSets: [],
+        discoveryDataSets: [],
         analysisReports: [],
         focusItemSets: [],
         creativeReports: [],
@@ -183,6 +242,42 @@ export function getLatestDataSet(context: GlobalContext): DataSet | null {
 }
 
 /**
+ * Get the latest discovery dataset from context
+ */
+export function getLatestDiscoveryDataSet(context: GlobalContext): DiscoveryDataSet | null {
+    if (context.discoveryDataSets.length === 0) return null;
+    return context.discoveryDataSets[context.discoveryDataSets.length - 1];
+}
+
+/**
+ * Get the latest data (either own ads or discovery ads) - returns the most recent one
+ */
+export type AnyDataSet = DataSet | DiscoveryDataSet;
+export type AnyAdData = AdData | DiscoveryAd;
+
+export function getLatestAnyDataSet(context: GlobalContext): { dataSet: AnyDataSet; type: 'own' | 'discovery' } | null {
+    const latestOwn = context.dataSets.length > 0 ? context.dataSets[context.dataSets.length - 1] : null;
+    const latestDiscovery = context.discoveryDataSets.length > 0 ? context.discoveryDataSets[context.discoveryDataSets.length - 1] : null;
+    
+    if (!latestOwn && !latestDiscovery) return null;
+    if (!latestOwn) return { dataSet: latestDiscovery!, type: 'discovery' };
+    if (!latestDiscovery) return { dataSet: latestOwn, type: 'own' };
+    
+    // Return whichever is more recent
+    if (latestDiscovery.timestamp > latestOwn.timestamp) {
+        return { dataSet: latestDiscovery, type: 'discovery' };
+    }
+    return { dataSet: latestOwn, type: 'own' };
+}
+
+/**
+ * Check if data is a discovery ad (has brand_name but no metrics)
+ */
+export function isDiscoveryAd(item: any): item is DiscoveryAd {
+    return 'brand_name' in item && !('metrics' in item);
+}
+
+/**
  * Get the latest focus item set from context
  */
 export function getLatestFocusItemSet(context: GlobalContext): FocusItemSet | null {
@@ -196,12 +291,28 @@ export function getLatestFocusItemSet(context: GlobalContext): FocusItemSet | nu
 export function getContextSummary(context: GlobalContext): string {
     const parts: string[] = [];
     
+    // Active channel
     parts.push(`Channel: ${context.channel.name} (${context.channel.platform})`);
     parts.push(`Channel ID: ${context.channel.id}`);
     
+    // User-selected brands
+    if (context.followedBrands.length > 0) {
+        parts.push(`\nSelected Brands to Monitor:`);
+        context.followedBrands.forEach(brand => {
+            parts.push(`  - ${brand.name}${brand.category ? ` (${brand.category})` : ''}`);
+        });
+    }
+    
     if (context.dataSets.length > 0) {
-        parts.push(`\nData Sets: ${context.dataSets.length}`);
+        parts.push(`\nOwn Ad Data Sets: ${context.dataSets.length}`);
         context.dataSets.forEach((ds, i) => {
+            parts.push(`  [${i + 1}] ${ds.queryDescription} (${ds.data.length} items)`);
+        });
+    }
+    
+    if (context.discoveryDataSets.length > 0) {
+        parts.push(`\nDiscovery/Competitor Data Sets: ${context.discoveryDataSets.length}`);
+        context.discoveryDataSets.forEach((ds, i) => {
             parts.push(`  [${i + 1}] ${ds.queryDescription} (${ds.data.length} items)`);
         });
     }
