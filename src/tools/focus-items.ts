@@ -98,9 +98,6 @@ Task: "Select top 5 video ads"
 ## SELECTION TASK
 ${stepDescription}
 
-## USER'S ORIGINAL REQUEST
-${context.userInput}
-
 ## DATA TYPE
 ${isDiscovery ? 'COMPETITOR ADS (no performance metrics)' : 'YOUR OWN ADS (with metrics)'}
 
