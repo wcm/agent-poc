@@ -84,14 +84,14 @@ const ContextSelector: React.FC<ContextSelectorProps> = ({ type, selectedIds, on
 							<div key={item.id} className={`context-selector-item ${selected.has(item.id) ? "selected" : ""}`} onClick={() => toggleItem(item.id)}>
 								<div className="item-checkbox">{selected.has(item.id) && <Check size={14} />}</div>
 								{isChannel(item) ? (
-									<div className="item-info">
-										<span className="item-name">{item.name}</span>
-										<span className="item-meta">{item.platform}</span>
+									<div className="context-item-info">
+										<span className="context-item-name">{item.name}</span>
+										<span className="context-item-meta">{item.platform}</span>
 									</div>
 								) : (
-									<div className="item-info">
-										<img src={item.logo} alt={item.name} className="item-logo" />
-										<span className="item-name">{item.name}</span>
+									<div className="context-item-info">
+										<img src={item.logo} alt={item.name} className="context-item-logo" />
+										<span className="context-item-name">{item.name}</span>
 									</div>
 								)}
 							</div>

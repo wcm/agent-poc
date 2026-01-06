@@ -324,6 +324,17 @@ body {
   color: white;
 }
 
+.new-task-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.new-task-btn.disabled:hover {
+  background-color: transparent;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+
 .section-label {
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -649,7 +660,7 @@ body {
   color: white;
 }
 
-.item-info {
+.context-item-info {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -657,7 +668,7 @@ body {
   min-width: 0;
 }
 
-.item-logo {
+.context-item-logo {
   width: 32px;
   height: 32px;
   border-radius: 6px;
@@ -665,7 +676,7 @@ body {
   flex-shrink: 0;
 }
 
-.item-name {
+.context-item-name {
   font-size: 0.875rem;
   font-weight: 500;
   color: #1e293b;
@@ -674,7 +685,7 @@ body {
   white-space: nowrap;
 }
 
-.item-meta {
+.context-item-meta {
   font-size: 0.75rem;
   color: #64748b;
   text-transform: capitalize;

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { PlusSquare, User, PanelLeftClose, PanelLeftOpen, Plus, Globe, Heart, Bookmark } from "lucide-react";
 import BrandSelector from "./BrandSelector";
 import { Session } from "../../types";
@@ -82,6 +82,8 @@ interface SidebarProps {
 	onChannelSelect?: (channelId: string) => void;
 	onChannelConnect?: (channelId: string) => Promise<void>;
 	onRefreshChannels?: () => void;
+	// Loading state
+	isLoading?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -102,8 +104,26 @@ const Sidebar: React.FC<SidebarProps> = ({
 	onChannelSelect,
 	onChannelConnect,
 	onRefreshChannels,
+	isLoading = false,
 }) => {
 	const [addChannelOpen, setAddChannelOpen] = useState(false);
+	const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+	// Auto-dismiss toast after 3 seconds
+	useEffect(() => {
+		if (toastMessage) {
+			const timer = setTimeout(() => setToastMessage(null), 3000);
+			return () => clearTimeout(timer);
+		}
+	}, [toastMessage]);
+
+	const handleNewTaskClick = () => {
+		if (isLoading) {
+			setToastMessage("Please wait for the current task to finish...");
+			return;
+		}
+		onNewSession();
+	};
 
 	const navItems = [
 		{ id: "atria", icon: AtriaIcon, label: "Atria" },
@@ -151,7 +171,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						<div className="l2-content">
 							{activeTab === "atria" && (
 								<>
-									<div className="new-task-btn" onClick={onNewSession}>
+									<div className={`new-task-btn ${isLoading ? "disabled" : ""}`} onClick={handleNewTaskClick}>
 										<PlusSquare size={16} />
 										<span>New Task</span>
 									</div>
@@ -225,6 +245,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 					</div>
 				)}
 			</div>
+
+			{/* Toast notification */}
+			{toastMessage && <div className="toast-notification">{toastMessage}</div>}
 		</div>
 	);
 };

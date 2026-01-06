@@ -339,6 +339,7 @@ const MainLayout: React.FC = () => {
 				activeSessionId={activeSessionId}
 				onSessionSelect={handleSessionSelect}
 				onNewSession={handleNewSession}
+				isLoading={isLoading}
 				isCollapsed={isCollapsed}
 				onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
 				activeInspirationTab={activeInspirationTab}
