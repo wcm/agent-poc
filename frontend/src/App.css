@@ -2607,7 +2607,7 @@ body {
     margin-top: 12px;
 }
 
-.metric-pill {
+.metric-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2615,13 +2615,13 @@ body {
     padding: 0;
 }
 
-.metric-pill .metric-label {
+.metric-row .metric-label {
     color: #64748b;
     font-size: 0.8rem;
     font-weight: 400;
 }
 
-.metric-pill .metric-value {
+.metric-row .metric-value {
     color: #334155;
     font-size: 0.8rem;
     font-weight: 500;

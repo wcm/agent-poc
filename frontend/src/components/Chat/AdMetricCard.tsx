@@ -61,31 +61,31 @@ const AdMetricCard: React.FC<AdMetricCardProps> = ({ item, itemData, itemName })
 			</div>
 			<div className="metric-card-metrics">
 				{metrics.cost_per_lead !== undefined && (
-					<div className="metric-pill">
+					<div className="metric-row">
 						<span className="metric-label">Cost per lead</span>
 						<span className="metric-value">{formatCurrency(metrics.cost_per_lead)}</span>
 					</div>
 				)}
 				{metrics.spend !== undefined && (
-					<div className="metric-pill">
+					<div className="metric-row">
 						<span className="metric-label">Spend</span>
 						<span className="metric-value">{formatCurrency(metrics.spend)}</span>
 					</div>
 				)}
 				{metrics.roas !== undefined && (
-					<div className="metric-pill">
+					<div className="metric-row">
 						<span className="metric-label">ROAS</span>
 						<span className="metric-value">{formatNumber(metrics.roas)}</span>
 					</div>
 				)}
 				{metrics.ctr !== undefined && (
-					<div className="metric-pill">
+					<div className="metric-row">
 						<span className="metric-label">CTR</span>
 						<span className="metric-value">{formatPercentage(metrics.ctr)}</span>
 					</div>
 				)}
 				{metrics.impressions !== undefined && (
-					<div className="metric-pill">
+					<div className="metric-row">
 						<span className="metric-label">Impressions</span>
 						<span className="metric-value">{formatNumber(metrics.impressions)}</span>
 					</div>
