@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "PORT=3002 ts-node src/server.ts",
-    "build": "npm install && npm install --prefix frontend && npm run build --prefix frontend && tsc",
+    "build": "npm install && npm install --prefix frontend && npm install --prefix user-query-analysis && npm run build --prefix frontend && npm run build --prefix user-query-analysis && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
