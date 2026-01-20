@@ -99,7 +99,7 @@ export default function App() {
         }
         setMetadata({ ...data, suggested: suggestedValues });
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -215,6 +215,10 @@ export default function App() {
           y: userBinEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
+          text: userBinEntries.map(([, value]) => value),
+          textposition: "outside",
+          texttemplate: "%{text}",
+          cliponaxis: false,
         },
       ],
       {
@@ -233,6 +237,10 @@ export default function App() {
           y: dateEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
+          text: dateEntries.map(([, value]) => value),
+          textposition: "outside",
+          texttemplate: "%{text}",
+          cliponaxis: false,
         },
       ],
       {
@@ -254,6 +262,10 @@ export default function App() {
           marker: {
             color: categoryEntries.map(([key]) => CATEGORY_COLORS[key] || "#2563eb"),
           },
+          text: categoryEntries.map(([, value]) => value),
+          textposition: "outside",
+          texttemplate: "%{text}",
+          cliponaxis: false,
         },
       ],
       {
@@ -278,6 +290,10 @@ export default function App() {
               return CATEGORY_COLORS[category] || "#2563eb";
             }),
           },
+          text: comboEntries.map(([, value]) => value),
+          textposition: "outside",
+          texttemplate: "%{text}",
+          cliponaxis: false,
         },
       ],
       {
@@ -297,6 +313,10 @@ export default function App() {
           y: planEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
+          text: planEntries.map(([, value]) => value),
+          textposition: "outside",
+          texttemplate: "%{text}",
+          cliponaxis: false,
         },
       ],
       {
@@ -316,6 +336,10 @@ export default function App() {
           y: suggestedEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
+          text: suggestedEntries.map(([, value]) => value),
+          textposition: "outside",
+          texttemplate: "%{text}",
+          cliponaxis: false,
         },
       ],
       {
@@ -358,6 +382,10 @@ export default function App() {
           y: activeDayEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
+          text: activeDayEntries.map(([, value]) => value),
+          textposition: "outside",
+          texttemplate: "%{text}",
+          cliponaxis: false,
         },
       ],
       {
