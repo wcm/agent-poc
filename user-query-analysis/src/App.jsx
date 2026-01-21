@@ -165,6 +165,21 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function formatCreatedAt(value) {
+  if (!value) {
+    return "";
+  }
+  const [datePart, timePart] = value.trim().split(" ");
+  if (!datePart || !timePart) {
+    return value;
+  }
+  const [time] = timePart.split(".");
+  if (!time) {
+    return value;
+  }
+  return `${datePart} ${time.slice(0, 5)}`;
+}
+
 function normalizePlanType(value) {
   if (!value) {
     return "unknown";
@@ -190,6 +205,10 @@ function computeCounts(values) {
 
 function toSortedEntries(map) {
   return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+}
+
+function formatValueWithPercent(value, percent) {
+  return `${value}<br><span style="fill:#94a3b8">${percent}%</span>`;
 }
 
 export default function App() {
@@ -324,6 +343,7 @@ export default function App() {
 
     const userCounts = computeCounts(records.map((r) => r.user_id));
     const queryCountsPerUser = Array.from(userCounts.values());
+    const totalUsersCount = userCounts.size;
     const userBins = new Map();
     for (let i = 1; i <= 10; i += 1) {
       userBins.set(String(i), 0);
@@ -334,6 +354,9 @@ export default function App() {
       userBins.set(key, (userBins.get(key) || 0) + 1);
     });
     const userBinEntries = Array.from(userBins.entries());
+    const userBinPercents = userBinEntries.map(([, value]) =>
+      totalUsersCount > 0 ? ((value / totalUsersCount) * 100).toFixed(1) : "0.0"
+    );
 
     const dateCounts = computeCounts(records.map((r) => getDateKey(r.created_at)));
     const dateEntries = Array.from(dateCounts.entries()).sort(
@@ -398,7 +421,9 @@ export default function App() {
           y: userBinEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
-          text: userBinEntries.map(([, value]) => value),
+          text: userBinEntries.map(([, value], index) =>
+            formatValueWithPercent(value, userBinPercents[index])
+          ),
           textposition: "outside",
           texttemplate: "%{text}",
           cliponaxis: false,
@@ -434,7 +459,11 @@ export default function App() {
       { displayModeBar: false, responsive: true }
     );
 
+    const totalQueryCount = records.length || 0;
     const categoryEntries = toSortedEntries(categoryCounts);
+    const categoryPercents = categoryEntries.map(([, value]) =>
+      totalQueryCount > 0 ? ((value / totalQueryCount) * 100).toFixed(1) : "0.0"
+    );
     window.Plotly.react(
       categoryChartRef.current,
       [
@@ -445,7 +474,9 @@ export default function App() {
           marker: {
             color: categoryEntries.map(([key]) => CATEGORY_COLORS[key] || "#2563eb"),
           },
-          text: categoryEntries.map(([, value]) => value),
+          text: categoryEntries.map(([, value], index) =>
+            formatValueWithPercent(value, categoryPercents[index])
+          ),
           textposition: "outside",
           texttemplate: "%{text}",
           cliponaxis: false,
@@ -460,6 +491,9 @@ export default function App() {
     );
 
     const comboEntries = toSortedEntries(comboCounts);
+    const comboPercents = comboEntries.map(([, value]) =>
+      totalQueryCount > 0 ? ((value / totalQueryCount) * 100).toFixed(1) : "0.0"
+    );
     window.Plotly.react(
       comboChartRef.current,
       [
@@ -473,7 +507,9 @@ export default function App() {
               return CATEGORY_COLORS[category] || "#2563eb";
             }),
           },
-          text: comboEntries.map(([, value]) => value),
+          text: comboEntries.map(([, value], index) =>
+            formatValueWithPercent(value, comboPercents[index])
+          ),
           textposition: "outside",
           texttemplate: "%{text}",
           cliponaxis: false,
@@ -490,6 +526,9 @@ export default function App() {
     const planEntries = toSortedEntries(planCounts).sort(
       ([left], [right]) => getPlanRank(left) - getPlanRank(right)
     );
+    const planPercents = planEntries.map(([, value]) =>
+      totalQueryCount > 0 ? ((value / totalQueryCount) * 100).toFixed(1) : "0.0"
+    );
     window.Plotly.react(
       planChartRef.current,
       [
@@ -498,7 +537,9 @@ export default function App() {
           y: planEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
-          text: planEntries.map(([, value]) => value),
+          text: planEntries.map(([, value], index) =>
+            formatValueWithPercent(value, planPercents[index])
+          ),
           textposition: "outside",
           texttemplate: "%{text}",
           cliponaxis: false,
@@ -515,6 +556,9 @@ export default function App() {
     const planUserEntries = Array.from(planUsers.entries())
       .map(([key, users]) => [key, users.size])
       .sort(([left], [right]) => getPlanRank(left) - getPlanRank(right));
+    const planUserPercents = planUserEntries.map(([, value]) =>
+      totalUsersCount > 0 ? ((value / totalUsersCount) * 100).toFixed(1) : "0.0"
+    );
     window.Plotly.react(
       planUsersChartRef.current,
       [
@@ -523,7 +567,9 @@ export default function App() {
           y: planUserEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
-          text: planUserEntries.map(([, value]) => value),
+          text: planUserEntries.map(([, value], index) =>
+            formatValueWithPercent(value, planUserPercents[index])
+          ),
           textposition: "outside",
           texttemplate: "%{text}",
           cliponaxis: false,
@@ -538,6 +584,9 @@ export default function App() {
     );
 
     const suggestedEntries = Array.from(suggestedCounts.entries());
+    const suggestedPercents = suggestedEntries.map(([, value]) =>
+      totalQueryCount > 0 ? ((value / totalQueryCount) * 100).toFixed(1) : "0.0"
+    );
     window.Plotly.react(
       suggestedChartRef.current,
       [
@@ -546,7 +595,9 @@ export default function App() {
           y: suggestedEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
-          text: suggestedEntries.map(([, value]) => value),
+          text: suggestedEntries.map(([, value], index) =>
+            formatValueWithPercent(value, suggestedPercents[index])
+          ),
           textposition: "outside",
           texttemplate: "%{text}",
           cliponaxis: false,
@@ -583,6 +634,9 @@ export default function App() {
     const activeDayEntries = Array.from(activeDayCounts.entries()).sort(
       (a, b) => a[0] - b[0]
     );
+    const activeDayPercents = activeDayEntries.map(([, value]) =>
+      totalUsersCount > 0 ? ((value / totalUsersCount) * 100).toFixed(1) : "0.0"
+    );
 
     window.Plotly.react(
       activeDaysChartRef.current,
@@ -592,7 +646,9 @@ export default function App() {
           y: activeDayEntries.map(([, value]) => value),
           type: "bar",
           marker: { color: "#2563eb" },
-          text: activeDayEntries.map(([, value]) => value),
+          text: activeDayEntries.map(([, value], index) =>
+            formatValueWithPercent(value, activeDayPercents[index])
+          ),
           textposition: "outside",
           texttemplate: "%{text}",
           cliponaxis: false,
@@ -845,14 +901,14 @@ export default function App() {
         <table>
           <thead>
             <tr>
-              <th onClick={() => handleSort("user_id")}>
+              <th className="col-user-id" onClick={() => handleSort("user_id")}>
                 User ID {sortKey === "user_id" ? `(${sortDir})` : ""}
               </th>
               <th>Query Text</th>
-              <th onClick={() => handleSort("created_at")}>
+              <th className="col-plan" onClick={() => handleSort("created_at")}>
                 Created At {sortKey === "created_at" ? `(${sortDir})` : ""}
               </th>
-              <th>Plan</th>
+              <th className="col-plan">Plan</th>
               <th>Tags</th>
               <th>Suggested</th>
             </tr>
@@ -872,10 +928,10 @@ export default function App() {
                     key={`${row.user_id}-${index}`}
                     className={useAlt ? "row-alt" : undefined}
                   >
-                    <td>{row.user_id}</td>
+                    <td className="col-user-id">{row.user_id}</td>
                     <td>{row.text}</td>
-                    <td>{row.created_at}</td>
-                    <td>{row.recurring_plan_type}</td>
+                    <td className="col-plan">{formatCreatedAt(row.created_at)}</td>
+                    <td className="col-plan">{row.recurring_plan_type}</td>
                     <td>
                       {(row.tags || []).map((tag, tagIndex) => {
                         const label = formatTag(tag);

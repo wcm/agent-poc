@@ -158,6 +158,17 @@ tbody td {
   vertical-align: top;
 }
 
+.col-user-id {
+  width: 120px;
+  max-width: 120px;
+  word-break: break-all;
+}
+
+.col-plan {
+  width: 120px;
+  max-width: 120px;
+}
+
 .row-alt {
   background: #e2e8f0;
 }
