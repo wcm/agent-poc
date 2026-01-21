@@ -22,6 +22,134 @@ const CATEGORY_COLORS = {
   other: "#a855f7",
 };
 
+const TAG_DETAILS = {
+  data_analysis: {
+    label: "Data Analysis",
+    topics: {
+      query: {
+        description: "Direct requests to retrieve or compute data.",
+        examples: [
+          "How many ads were uploaded last month?",
+          "What are my top ads from last week?",
+        ],
+      },
+      general: {
+        description: "High-level performance or broad analysis requests.",
+        examples: [
+          "How is the ad account doing this month?",
+          "Why are my best ads performing well?",
+        ],
+      },
+      comparison: {
+        description: "Compare performance across time, assets, or segments.",
+        examples: [
+          "Compare performance between this week and last week.",
+          "Which ads performed best vs worst in January?",
+        ],
+      },
+      benchmarking: {
+        description: "Evaluate metrics against norms or averages.",
+        examples: [
+          "How good is 1.76?",
+          "What is the average click to purchase percentage?",
+        ],
+      },
+      creative_insights: {
+        description: "Insights on creative themes, hooks, or formats.",
+        examples: [
+          "What are our top 10 best static non-UGC creatives?",
+          "Summarize angles of top performing images.",
+        ],
+      },
+      audience: {
+        description: "Audience segmentation, targeting, or demographics.",
+        examples: [
+          "Can I break down ages in Atria?",
+          "Which audiences should I exclude?",
+        ],
+      },
+    },
+  },
+  recommendation: {
+    label: "Recommendation",
+    topics: {
+      operation: {
+        description: "Suggested actions to improve performance.",
+        examples: [
+          "Given my trends, what actions should I take?",
+          "Which ads should I pause?",
+        ],
+      },
+      creative_iteration: {
+        description: "Recommendations to iterate or improve creatives.",
+        examples: [
+          "How can I improve the hook rate on this ad?",
+          "What changes should I make to this creative?",
+        ],
+      },
+    },
+  },
+  action: {
+    label: "Action",
+    topics: {
+      export: {
+        description: "Export or share outputs.",
+        examples: [
+          "Can you export this as a PDF?",
+          "Export the report for the last 2 weeks.",
+        ],
+      },
+      create_edit_report: {
+        description: "Create or edit reports in the product.",
+        examples: [
+          "Create a report for campaigns with \"BB\".",
+          "Can I make reports and share with clients?",
+        ],
+      },
+      ad_iteration: {
+        description: "Requests to clone or iterate ads.",
+        examples: [
+          "How do I clone ads in Atria?",
+          "Create iterations for this ad.",
+        ],
+      },
+      create_file: {
+        description: "Generate files like emails or spreadsheets.",
+        examples: [
+          "Send me emails of top performing creatives.",
+          "Create a spreadsheet of top ads.",
+        ],
+      },
+    },
+  },
+  other: {
+    label: "Other",
+    topics: {
+      unspecified: {
+        description: "Fallback when no other tag fits.",
+        examples: [
+          "I want only AUS campaigns.",
+          "How can I see the exact batch number of the ads?",
+        ],
+      },
+      follow_up_clarification: {
+        description: "Clarifying questions or follow-ups.",
+        examples: [
+          "Can you try it again?",
+          "Are you pulling that hold rate from videos only?",
+        ],
+      },
+      atria_support: {
+        description: "Support or account-related questions.",
+        examples: [
+          "Where can I find my invoices?",
+          "Can you help with account setup?",
+        ],
+      },
+    },
+  },
+};
+
 function parseDate(value) {
   if (!value) {
     return null;
@@ -74,16 +202,19 @@ export default function App() {
     min_date: "",
     max_date: "",
   });
+  const [availableTopics, setAvailableTopics] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sortKey, setSortKey] = useState("user_id");
   const [sortDir, setSortDir] = useState("asc");
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
 
   const userChartRef = useRef(null);
   const dateChartRef = useRef(null);
   const categoryChartRef = useRef(null);
   const comboChartRef = useRef(null);
   const planChartRef = useRef(null);
+  const planUsersChartRef = useRef(null);
   const suggestedChartRef = useRef(null);
   const activeDaysChartRef = useRef(null);
 
@@ -101,6 +232,42 @@ export default function App() {
       })
       .catch(() => { });
   }, []);
+
+  useEffect(() => {
+    if (!filters.category) {
+      setAvailableTopics(metadata.topics || []);
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+    if (filters.dateTo) params.set("date_to", filters.dateTo);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.suggested) params.set("suggested", filters.suggested);
+    if (filters.plan) params.set("recurring_plan_type", filters.plan);
+
+    fetch(`/user-query-analysis/api/records?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const topics = new Set();
+        (data.records || []).forEach((record) => {
+          (record.tags || []).forEach((tag) => {
+            if (tag?.category === filters.category && tag?.topic) {
+              topics.add(tag.topic);
+            }
+          });
+        });
+        setAvailableTopics(Array.from(topics).sort());
+      })
+      .catch(() => setAvailableTopics([]));
+  }, [
+    filters.category,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.suggested,
+    filters.plan,
+    metadata.topics,
+  ]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -190,6 +357,22 @@ export default function App() {
     const planCounts = computeCounts(
       records.map((r) => normalizePlanType(r.recurring_plan_type))
     );
+    const planUsers = new Map();
+    records.forEach((record) => {
+      const planKey = normalizePlanType(record.recurring_plan_type);
+      const userId = record.user_id;
+      if (!planUsers.has(planKey)) {
+        planUsers.set(planKey, new Set());
+      }
+      if (userId) {
+        planUsers.get(planKey).add(userId);
+      }
+    });
+    const planOrder = ["trial", "core", "plus", "business", "enterprise", "basic"];
+    const getPlanRank = (value) => {
+      const index = planOrder.indexOf(value);
+      return index === -1 ? planOrder.length : index;
+    };
     const suggestedCounts = new Map();
     const suggestedValues = (() => {
       const base = metadata.suggested && metadata.suggested.length > 0
@@ -304,7 +487,9 @@ export default function App() {
       { displayModeBar: false, responsive: true }
     );
 
-    const planEntries = toSortedEntries(planCounts);
+    const planEntries = toSortedEntries(planCounts).sort(
+      ([left], [right]) => getPlanRank(left) - getPlanRank(right)
+    );
     window.Plotly.react(
       planChartRef.current,
       [
@@ -323,6 +508,31 @@ export default function App() {
         margin: { t: 20, r: 10, b: 60, l: 40 },
         xaxis: { title: "", tickangle: -20 },
         yaxis: { title: "Queries" },
+      },
+      { displayModeBar: false, responsive: true }
+    );
+
+    const planUserEntries = Array.from(planUsers.entries())
+      .map(([key, users]) => [key, users.size])
+      .sort(([left], [right]) => getPlanRank(left) - getPlanRank(right));
+    window.Plotly.react(
+      planUsersChartRef.current,
+      [
+        {
+          x: planUserEntries.map(([key]) => String(key).replace(/_/g, " ")),
+          y: planUserEntries.map(([, value]) => value),
+          type: "bar",
+          marker: { color: "#2563eb" },
+          text: planUserEntries.map(([, value]) => value),
+          textposition: "outside",
+          texttemplate: "%{text}",
+          cliponaxis: false,
+        },
+      ],
+      {
+        margin: { t: 20, r: 10, b: 60, l: 40 },
+        xaxis: { title: "", tickangle: -20 },
+        yaxis: { title: "Number of Users", tickformat: "d" },
       },
       { displayModeBar: false, responsive: true }
     );
@@ -412,6 +622,69 @@ export default function App() {
       <p className="subtitle">
         Filter and explore user questions, tags, and suggested intents.
       </p>
+      <button
+        className="tag-details-button"
+        type="button"
+        onClick={() => setIsTagModalOpen(true)}
+      >
+        Tag Details
+      </button>
+
+      {isTagModalOpen && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Tag Details"
+          onClick={() => setIsTagModalOpen(false)}
+        >
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Tag Details</h2>
+              <button
+                className="modal-close"
+                type="button"
+                onClick={() => setIsTagModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            {Object.entries(TAG_DETAILS).map(([category, config]) => (
+              <section className="tag-category" key={category}>
+                <div className="tag-category-title">
+                  <h3>{config.label}</h3>
+                </div>
+                <div className="tag-category-grid">
+                  {Object.entries(config.topics).map(([topic, detail]) => (
+                    <div className="tag-detail-card" key={`${category}-${topic}`}>
+                      <div className="tag-detail-title">
+                        <span
+                          className="tag-pill"
+                          style={{
+                            backgroundColor:
+                              CATEGORY_COLORS[category] || "#2563eb",
+                          }}
+                        >
+                          {`${category.replace(/_/g, " ")} - ${topic.replace(/_/g, " ")}`}
+                        </span>
+                      </div>
+                      <p className="tag-detail-desc">{detail.description}</p>
+                      <div className="tag-detail-examples">
+                        <div className="tag-detail-label">Examples</div>
+                        <ul>
+                          {detail.examples.map((example) => (
+                            <li key={example}>{example}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      )}
 
       <section className="filters">
         <div className="filter-card">
@@ -475,7 +748,11 @@ export default function App() {
           <select
             value={filters.category}
             onChange={(event) =>
-              setFilters((prev) => ({ ...prev, category: event.target.value }))
+              setFilters((prev) => ({
+                ...prev,
+                category: event.target.value,
+                topic: "",
+              }))
             }
           >
             <option value="">All</option>
@@ -495,7 +772,7 @@ export default function App() {
             }
           >
             <option value="">All</option>
-            {metadata.topics.map((topic) => (
+            {availableTopics.map((topic) => (
               <option key={topic} value={topic}>
                 {topic.replace(/_/g, " ")}
               </option>
@@ -533,22 +810,26 @@ export default function App() {
           <div className="chart" ref={activeDaysChartRef} />
         </div>
         <div className="card">
-          <h3>Queries per Day</h3>
-          <div className="chart" ref={dateChartRef} />
+          <h3>Plan Type per User</h3>
+          <div className="chart" ref={planUsersChartRef} />
         </div>
         <div className="card">
-          <h3>User Plan Type</h3>
-          <div className="chart" ref={planChartRef} />
+          <h3>Queries per Day</h3>
+          <div className="chart" ref={dateChartRef} />
         </div>
         <div className="card">
           <h3>Suggested Question</h3>
           <div className="chart" ref={suggestedChartRef} />
         </div>
         <div className="card">
+          <h3>Queries per Plan Type</h3>
+          <div className="chart" ref={planChartRef} />
+        </div>
+        <div className="card">
           <h3>Tag Category Distribution</h3>
           <div className="chart" ref={categoryChartRef} />
         </div>
-        <div className="card full-row">
+        <div className="card double-column">
           <h3>Tag Category + Topic Distribution</h3>
           <div className="chart" ref={comboChartRef} />
         </div>
