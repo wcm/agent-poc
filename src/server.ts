@@ -42,7 +42,7 @@ const writeJson = async (filename: string, data: any) => {
     await fs.promises.writeFile(path.join(DATA_DIR, filename), JSON.stringify(data, null, 4), 'utf-8');
 };
 
-const USER_QUERY_DATA_PATH = path.join(process.cwd(), 'src', 'data', 'extracted_query_with_tags.json');
+const USER_QUERY_DATA_PATH = path.join(process.cwd(), 'src', 'data', 'conversations_tagged.json');
 
 type UserQueryRecord = {
     user_id?: string;
@@ -52,6 +52,26 @@ type UserQueryRecord = {
     suggested?: string;
     tags?: Array<{ category?: string; topic?: string }>;
 };
+
+/** Flatten conversations_tagged.json to one record per user message (assistant messages ignored). */
+function flattenConversationsToUserRecords(conversations: any[]): UserQueryRecord[] {
+    const records: UserQueryRecord[] = [];
+    for (const conv of conversations) {
+        const messages = conv.messages ?? [];
+        for (const msg of messages) {
+            if (msg.type !== 'user') continue;
+            records.push({
+                user_id: conv.user_id,
+                text: msg.content,
+                created_at: msg.created_at,
+                recurring_plan_type: conv.recurring_plan_type,
+                tags: msg.tags,
+                suggested: msg.suggested ?? 'no',
+            });
+        }
+    }
+    return records;
+}
 
 const normalizePlanType = (value?: string | null) => {
     if (!value || typeof value !== 'string') {
@@ -93,7 +113,11 @@ const parseDateRange = (value?: string | null, isEnd?: boolean) => {
 
 const loadUserQueryData = (): UserQueryRecord[] => {
     const raw = fs.readFileSync(USER_QUERY_DATA_PATH, 'utf-8');
-    return JSON.parse(raw);
+    const conversations = JSON.parse(raw);
+    if (!Array.isArray(conversations)) {
+        return [];
+    }
+    return flattenConversationsToUserRecords(conversations);
 };
 
 const matchesTag = (record: UserQueryRecord, category?: string | null, topic?: string | null) => {
