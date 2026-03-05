@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { ArrowUp, X, BarChart3, Sparkles, Eye, Compass, LucideIcon } from "lucide-react";
+import { ArrowUp, X, BarChart3, Sparkles, Eye, Compass, Wand2, LucideIcon } from "lucide-react";
 import { Message, StreamedSection, PlanTask, Channel, Brand } from "../../types";
 import StreamingMessage from "./StreamingMessage";
 import ContextSelector from "./ContextSelector";
@@ -15,6 +15,32 @@ interface ChatInterfaceProps {
 
 // Question categories with detailed prompts
 const SUGGESTED_QUESTIONS: Record<string, { title: string; icon: LucideIcon; questions: { title: string; summary: string; question: string }[] }> = {
+	adGeneration: {
+		title: "Ad Generation",
+		icon: Wand2,
+		questions: [
+			{
+				title: "Top Spenders Remix",
+				summary: "New concepts from best spenders",
+				question: "Generate more ad variations based on my top 3 spending ads.",
+			},
+			{
+				title: "Best Performers",
+				summary: "Iterate on winning creatives",
+				question: "Take my top 3 ads by ROAS and generate new ad variations that build on their success.",
+			},
+			{
+				title: "Video Scripts",
+				summary: "New scripts from top videos",
+				question: "Analyze my best performing video ads and generate new video script concepts with fresh hooks and angles.",
+			},
+			{
+				title: "Competitor Inspired",
+				summary: "Generate ads from competitor insights",
+				question: "Analyze top competitor ads, then generate new ad variations for my brand inspired by their best strategies.",
+			},
+		],
+	},
 	ownPerformance: {
 		title: "Own Performance",
 		icon: BarChart3,

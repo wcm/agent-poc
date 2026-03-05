@@ -83,6 +83,58 @@ export interface ErrorEvent {
     message: string;
 }
 
+/**
+ * Ad concept shared fields
+ */
+export interface AdConceptBase {
+    concept_name: string;
+    concept_description: string;
+    concept_summary: string;
+    concept_detail: string;
+    personas: string[];
+    creative_tags: {
+        ad_angles: string[];
+        emotion: string[];
+        themes: string[];
+    };
+}
+
+export type ImageConceptStatus = 'pending' | 'generating' | 'done' | 'failed';
+
+export interface ImageConcept extends AdConceptBase {
+    imageDataUrl: string;
+    status: ImageConceptStatus;
+}
+
+export interface VideoConcept extends AdConceptBase {
+    script: string;
+}
+
+// Image concepts event
+export interface ImageConceptsEvent {
+    type: 'image_concepts';
+    itemId: string;
+    itemName: string;
+    concepts: ImageConcept[];
+}
+
+// Image concept update event - progressive update for a single concept
+export interface ImageConceptUpdateEvent {
+    type: 'image_concept_update';
+    itemId: string;
+    conceptIndex: number;
+    imageDataUrl: string;
+    status: 'done' | 'failed';
+}
+
+// Video concepts event
+export interface VideoConceptsEvent {
+    type: 'video_concepts';
+    itemId: string;
+    itemName: string;
+    concepts: VideoConcept[];
+}
+
 // Union type of all SSE events
 export type SSEEvent = 
     | TextEvent 
@@ -92,7 +144,10 @@ export type SSEEvent =
     | FocusedItemsEvent 
     | ContextUpdateEvent 
     | DoneEvent
-    | ErrorEvent;
+    | ErrorEvent
+    | ImageConceptsEvent
+    | ImageConceptUpdateEvent
+    | VideoConceptsEvent;
 
 /**
  * Focused Item Card
@@ -148,7 +203,9 @@ export type StreamedSection =
     | { type: 'text'; content: string }
     | { type: 'plan'; planId: string; agentName: string; title: string; tasks: PlanTask[] }
     | { type: 'report'; reportType: 'performance' | 'creative' | 'common'; reportId: string; title: string; content: string; itemId?: string; itemName?: string; itemData?: ReportItemData }
-    | { type: 'focused_items'; items: FocusedItemCard[] };
+    | { type: 'focused_items'; items: FocusedItemCard[] }
+    | { type: 'image_concepts'; itemId: string; itemName: string; concepts: ImageConcept[] }
+    | { type: 'video_concepts'; itemId: string; itemName: string; concepts: VideoConcept[] };
 
 /**
  * Message with streaming sections

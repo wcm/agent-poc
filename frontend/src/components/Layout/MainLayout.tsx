@@ -186,6 +186,55 @@ const MainLayout: React.FC = () => {
 				break;
 			}
 
+			case "image_concepts": {
+				// Replace existing section for same itemId (progressive phases), or append if new
+				const existingIdx = sectionsRef.current.findIndex(
+					(s) => s.type === "image_concepts" && s.itemId === event.itemId
+				);
+				const section: StreamedSection = {
+					type: "image_concepts",
+					itemId: event.itemId,
+					itemName: event.itemName,
+					concepts: event.concepts,
+				};
+				if (existingIdx >= 0) {
+					sectionsRef.current[existingIdx] = section;
+				} else {
+					sectionsRef.current.push(section);
+				}
+				setStreamingSections([...sectionsRef.current]);
+				break;
+			}
+
+			case "image_concept_update": {
+				// Update a single concept in-place (same pattern as plan_status)
+				sectionsRef.current = sectionsRef.current.map((s) => {
+					if (s.type === "image_concepts" && s.itemId === event.itemId) {
+						const updatedConcepts = s.concepts.map((c, i) =>
+							i === event.conceptIndex
+								? { ...c, imageDataUrl: event.imageDataUrl, status: event.status as "done" | "failed" }
+								: c
+						);
+						return { ...s, concepts: updatedConcepts };
+					}
+					return s;
+				});
+				setStreamingSections([...sectionsRef.current]);
+				break;
+			}
+
+			case "video_concepts": {
+				const section: StreamedSection = {
+					type: "video_concepts",
+					itemId: event.itemId,
+					itemName: event.itemName,
+					concepts: event.concepts,
+				};
+				sectionsRef.current.push(section);
+				setStreamingSections([...sectionsRef.current]);
+				break;
+			}
+
 			case "context_update": {
 				// Update session context
 				setSessions((prev) =>

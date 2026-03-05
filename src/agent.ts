@@ -24,6 +24,7 @@ import { dataAnalysisTool } from './tools/data-analysis';
 import { focusItemsTool } from './tools/focus-items';
 import { creativeInsightsTool } from './tools/creative-insights';
 import { consolidateFindingsTool } from './tools/consolidate-findings';
+import { generateAdVariationsTool } from './tools/generate-ad-variations';
 import { narratorTool } from './tools/narrator';
 import { logger } from './utils/logger';
 
@@ -370,6 +371,11 @@ export class Agent extends EventEmitter {
                     content: result.content
                 });
                 return `Consolidation report generated`;
+            }
+
+            case 'generateAdVariations': {
+                const result = await generateAdVariationsTool.execute(step.description, this.context, this.stream);
+                return `Generated ad variations for ${result.results.length} items`;
             }
 
             default:

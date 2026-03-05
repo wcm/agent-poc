@@ -1,4 +1,4 @@
-import { ChannelInfo, FocusedItemCard, TaskStatus, BrandInfo } from './types';
+import { ChannelInfo, FocusedItemCard, TaskStatus, BrandInfo, ImageConcept, VideoConcept } from './types';
 
 /**
  * Query parameters for data fetching
@@ -145,11 +145,24 @@ export interface ConsolidationReport {
 }
 
 /**
+ * Generation result from image-generation or video-script-generation
+ */
+export interface GenerationResult {
+    id: string;
+    itemId: string;
+    itemName: string;
+    type: 'image' | 'video';
+    imageConcepts?: ImageConcept[];
+    videoConcepts?: VideoConcept[];
+    timestamp: number;
+}
+
+/**
  * Plan step structure
  */
 export interface PlanStep {
     id: string;
-    tool: 'dataQuery' | 'dataAnalysis' | 'focusItems' | 'creativeInsights' | 'consolidateFindings' | 'discoveryQuery';
+    tool: 'dataQuery' | 'dataAnalysis' | 'focusItems' | 'creativeInsights' | 'consolidateFindings' | 'discoveryQuery' | 'generateAdVariations';
     description: string;
     status: TaskStatus;
 }
@@ -195,6 +208,9 @@ export interface GlobalContext {
     // Consolidation reports
     consolidationReports: ConsolidationReport[];
     
+    // Ad generation results (image concepts + video scripts)
+    generationResults: GenerationResult[];
+    
     // Narrator messages for follow-up context
     narratorHistory: string[];
     
@@ -227,6 +243,7 @@ export function createEmptyContext(channel: ChannelInfo, userInput: string = '',
         focusItemSets: [],
         creativeReports: [],
         consolidationReports: [],
+        generationResults: [],
         narratorHistory: [],
         conversationHistory: [],
         currentPlan: null
@@ -286,6 +303,15 @@ export function getLatestFocusItemSet(context: GlobalContext): FocusItemSet | nu
 }
 
 /**
+ * Get creative reports for the latest focus item set
+ */
+export function getLatestCreativeReports(context: GlobalContext): CreativeReport[] {
+    const focusSet = getLatestFocusItemSet(context);
+    if (!focusSet) return [];
+    return context.creativeReports.filter(r => r.focusSetId === focusSet.id);
+}
+
+/**
  * Generate a summary of the context for the planner/LLM
  */
 export function getContextSummary(context: GlobalContext): string {
@@ -334,6 +360,14 @@ export function getContextSummary(context: GlobalContext): string {
     
     if (context.consolidationReports.length > 0) {
         parts.push(`\nConsolidation Reports: ${context.consolidationReports.length}`);
+    }
+    
+    if (context.generationResults.length > 0) {
+        parts.push(`\nAd Generation Results: ${context.generationResults.length}`);
+        context.generationResults.forEach((gr, i) => {
+            const count = gr.type === 'image' ? gr.imageConcepts?.length : gr.videoConcepts?.length;
+            parts.push(`  [${i + 1}] ${gr.itemName} (${gr.type}, ${count} concepts)`);
+        });
     }
     
     if (context.conversationHistory.length > 0) {

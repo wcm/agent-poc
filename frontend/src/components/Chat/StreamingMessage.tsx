@@ -4,6 +4,8 @@ import TextSection from "./TextSection";
 import PlanTimeline from "./PlanTimeline";
 import ReportCard from "./ReportCard";
 import FocusedItemsGrid from "./FocusedItemsGrid";
+import ImageConceptsRow from "./ImageConceptsRow";
+import VideoConceptsRow from "./VideoConceptsRow";
 
 interface StreamingMessageProps {
 	sections: StreamedSection[];
@@ -34,6 +36,12 @@ const renderSection = (section: StreamedSection, index: number, planStates: Map<
 
 		case "focused_items":
 			return <FocusedItemsGrid key={`items-${index}`} title="Focus Items" items={section.items} />;
+
+		case "image_concepts":
+			return <ImageConceptsRow key={`img-concepts-${section.itemId}`} itemName={section.itemName} concepts={section.concepts} />;
+
+		case "video_concepts":
+			return <VideoConceptsRow key={`vid-concepts-${section.itemId}`} itemName={section.itemName} concepts={section.concepts} />;
 
 		default:
 			return null;

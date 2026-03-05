@@ -60,6 +60,13 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 - **Output**: Comprehensive comparison/summary report
 - **Use when**: Need to compare groups (own vs competitor, brand A vs brand B), find common patterns, create actionable recommendations
 
+### 7. generateAdVariations
+- **Purpose**: Generate new ad concept variations (images and video scripts) based on creative insights
+- **Capabilities**: For each analyzed item — generates multiple ad concepts with AI-generated images (for image ads) or video scripts (for video ads)
+- **Output**: Image thumbnails row (8 concepts) for image ads, or video script cards (4 concepts) for video ads
+- **Use when**: User wants to generate new ad ideas, create ad variations, iterate on existing creatives, get inspiration for new ads
+- **REQUIRES**: Must run AFTER creativeInsights — needs creative reports in context
+
 ## PLANNING RULES
 
 ### For Your Own Ad Analysis:
@@ -80,10 +87,16 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 2. Then analyze competitors (discoveryQuery → dataAnalysis → focusItems → creativeInsights)
 3. Use consolidateFindings to compare and create actionable insights
 
+### For Ad Concept Generation:
+1. First analyze the ads (dataQuery → dataAnalysis → focusItems → creativeInsights)
+2. Then generate variations with generateAdVariations as the final step
+3. generateAdVariations ALWAYS comes after creativeInsights — it needs creative reports
+
 ### General Rules:
 - Keep plans concise - avoid redundant steps
 - Match the user's intent - "top" = sort desc, "worst" = sort asc
 - For competitor analysis, always include dataAnalysis to show what was found
+- When user asks to "generate", "create", "make" ad ideas/variations/concepts, include generateAdVariations
 
 ## DERIVING THE OBJECTIVE
 The objective field is crucial - it must be a clear, actionable statement of what to accomplish.
@@ -250,6 +263,29 @@ User: "ok"
         { "id": "3", "tool": "focusItems", "description": "Select top 3 image ads" },
         { "id": "4", "tool": "creativeInsights", "description": "Analyze creative elements of image ads" },
         { "id": "5", "tool": "consolidateFindings", "description": "Compare social proof patterns between top ads and image ads" }
+    ]
+}
+
+User: "Generate ad ideas based on my top 3 spending ads"
+{
+    "objective": "Analyze top spending ads and generate new ad concept variations",
+    "steps": [
+        { "id": "1", "tool": "dataQuery", "description": "Query top ads by spend (highest spenders)" },
+        { "id": "2", "tool": "focusItems", "description": "Select top 3 high-spend ads" },
+        { "id": "3", "tool": "creativeInsights", "description": "Deep dive into creative elements" },
+        { "id": "4", "tool": "generateAdVariations", "description": "Generate new ad concepts and images based on creative insights" }
+    ]
+}
+
+User: "Create new ad variations for my best performing video ads"
+{
+    "objective": "Generate video ad script variations based on top performing video ads",
+    "steps": [
+        { "id": "1", "tool": "dataQuery", "description": "Query top video ads by ROAS" },
+        { "id": "2", "tool": "dataAnalysis", "description": "Analyze video ad performance" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 3 video ads" },
+        { "id": "4", "tool": "creativeInsights", "description": "Analyze video creative elements and scripts" },
+        { "id": "5", "tool": "generateAdVariations", "description": "Generate new video script concepts based on analysis" }
     ]
 }`
         });

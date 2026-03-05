@@ -3587,3 +3587,467 @@ body {
     flex-direction: column;
 }
 
+/* ============================================
+   IMAGE CONCEPTS ROW
+   ============================================ */
+
+.image-concepts-container {
+    margin: 12px 0;
+}
+
+.image-concepts-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 8px;
+}
+
+.image-concepts-count {
+    margin-left: auto;
+    font-weight: 400;
+    color: #999;
+    font-size: 11px;
+}
+
+.image-concepts-row {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+}
+
+.image-concepts-row::-webkit-scrollbar {
+    height: 4px;
+}
+
+.image-concepts-row::-webkit-scrollbar-thumb {
+    background: #ddd;
+    border-radius: 2px;
+}
+
+.image-concept-thumbnail {
+    flex: 0 0 140px;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e5e5e5;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    background: #fafafa;
+}
+
+.image-concept-thumbnail:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: #ccc;
+}
+
+.image-concept-thumbnail img {
+    width: 140px;
+    height: 140px;
+    object-fit: cover;
+    display: block;
+}
+
+.image-concept-thumb-placeholder {
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f0f0f0;
+    color: #bbb;
+}
+
+.image-concept-thumbnail.clickable {
+    cursor: pointer;
+}
+
+.image-concept-thumbnail:not(.clickable) {
+    cursor: default;
+}
+
+.image-concept-thumb-pending,
+.image-concept-thumb-generating {
+    width: 140px;
+    height: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+    background: #f0f0f0;
+}
+
+.image-concept-thumb-pending span,
+.image-concept-thumb-generating span {
+    font-size: 10px;
+    color: #999;
+    z-index: 1;
+    text-align: center;
+    padding: 0 8px;
+}
+
+.image-concept-thumb-generating {
+    background: #e8e8e8;
+}
+
+.image-concept-thumb-shimmer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.4) 50%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: conceptShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes conceptShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.image-concept-thumb-failed {
+    width: 140px;
+    height: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.image-concept-thumb-failed span {
+    font-size: 10px;
+}
+
+
+/* ============================================
+   IMAGE CONCEPT MODAL
+   ============================================ */
+
+.image-concept-modal-content {
+    background: white;
+    border-radius: 12px;
+    max-width: 900px;
+    width: 90vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.image-concept-modal-body {
+    display: flex;
+    gap: 24px;
+    padding: 20px 24px 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.image-concept-modal-preview {
+    flex: 0 0 360px;
+}
+
+.image-concept-modal-preview img {
+    width: 100%;
+    border-radius: 8px;
+    display: block;
+}
+
+.image-concept-placeholder {
+    width: 360px;
+    height: 360px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 13px;
+}
+
+.image-concept-modal-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.image-concept-description {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 8px;
+}
+
+.image-concept-summary {
+    font-size: 13px;
+    color: #444;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.image-concept-section {
+    margin-bottom: 14px;
+}
+
+.image-concept-section h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.image-concept-detail {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #555;
+    background: #f8f8f8;
+    padding: 10px 12px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    font-family: inherit;
+    margin: 0;
+}
+
+.image-concept-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+/* ============================================
+   VIDEO CONCEPTS ROW
+   ============================================ */
+
+.video-concepts-container {
+    margin: 12px 0;
+}
+
+.video-concepts-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 8px;
+}
+
+.video-concepts-count {
+    margin-left: auto;
+    font-weight: 400;
+    color: #999;
+    font-size: 11px;
+}
+
+.video-concepts-row {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+}
+
+.video-concept-card {
+    flex: 0 0 220px;
+    padding: 14px 16px;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    background: #fafafa;
+}
+
+.video-concept-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: #ccc;
+}
+
+.video-concept-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #222;
+    margin-bottom: 6px;
+}
+
+.video-concept-card-preview {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.video-concept-card-personas {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+/* ============================================
+   VIDEO CONCEPT MODAL
+   ============================================ */
+
+.video-concept-modal-content {
+    background: white;
+    border-radius: 12px;
+    max-width: 900px;
+    width: 90vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.video-concept-modal-body {
+    display: flex;
+    gap: 24px;
+    padding: 20px 24px 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.video-concept-modal-script {
+    flex: 1;
+    min-width: 0;
+}
+
+.video-concept-modal-script h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 8px;
+}
+
+.video-script-text {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #444;
+    background: #f8f8f8;
+    padding: 14px 16px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    font-family: inherit;
+    margin: 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.video-concept-modal-details {
+    flex: 0 0 280px;
+}
+
+.video-concept-description {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 8px;
+}
+
+.video-concept-summary {
+    font-size: 13px;
+    color: #444;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.video-concept-section {
+    margin-bottom: 14px;
+}
+
+.video-concept-section h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.video-concept-detail {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #555;
+    background: #f8f8f8;
+    padding: 10px 12px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    font-family: inherit;
+    margin: 0;
+}
+
+/* ============================================
+   SHARED CONCEPT TAG STYLES
+   ============================================ */
+
+.concept-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.concept-tag.persona {
+    background: #e8f0fe;
+    color: #1a73e8;
+}
+
+.concept-tag.persona.small {
+    font-size: 10px;
+    padding: 1px 6px;
+}
+
+.concept-tag.angle {
+    background: #fce8e6;
+    color: #d93025;
+}
+
+.concept-tag.emotion {
+    background: #fef7e0;
+    color: #e37400;
+}
+
+.concept-tag.theme {
+    background: #e6f4ea;
+    color: #137333;
+}
+
+.concept-tag-group {
+    margin-bottom: 6px;
+}
+
+.concept-tag-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+}
+
+.concept-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
