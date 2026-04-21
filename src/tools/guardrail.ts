@@ -1,6 +1,38 @@
 import { Tool } from '../tool-base';
 import { GlobalContext, getContextSummary } from '../context';
 
+const CONFIRMATION_PATTERNS = [
+    /^(ok|okay|k)(?:\s+(please|thanks|thank you))?[.!]*$/i,
+    /^(yes|yeah|yep|yup)(?:\s+(please|thanks|thank you))?[.!]*$/i,
+    /^(sure|sounds good|sgtm)(?:\s+(please|thanks|thank you))?[.!]*$/i,
+    /^(go ahead|do it|please do|continue|proceed|send it|run it)(?:\s+(please|thanks|thank you))?[.!]*$/i,
+    /^(that works|let'?s do it|makes sense)(?:\s+(please|thanks|thank you))?[.!]*$/i,
+];
+
+function hasMeaningfulContext(context: GlobalContext): boolean {
+    return Boolean(
+        context.conversationHistory.length > 0 ||
+        context.currentPlan ||
+        context.dataSets.length > 0 ||
+        context.discoveryDataSets.length > 0 ||
+        context.analysisReports.length > 0 ||
+        context.focusItemSets.length > 0 ||
+        context.creativeReports.length > 0 ||
+        context.consolidationReports.length > 0 ||
+        context.generationResults.length > 0 ||
+        context.integrationResults.length > 0
+    );
+}
+
+function isConfirmatoryFollowup(userInput: string): boolean {
+    const normalized = userInput.trim().replace(/\s+/g, ' ');
+    if (!normalized || normalized.length > 80) {
+        return false;
+    }
+
+    return CONFIRMATION_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 /**
  * Result from guardrail check
  */
@@ -32,12 +64,12 @@ class GuardrailToolWrapper extends Tool {
 
 ## WHEN TO SKIP PLANNING (needsPlanning: false)
 - Simple greetings: "Hi", "Hello", "How are you"
-- Confirmatory responses: "yes", "sure", "okay", "go ahead", "do it"
 - Questions about existing context/reports: "summarize", "what did you find", "explain"
 - Simple clarifications that can be answered from context
 - Follow-up questions about previous analysis
 
 ## WHEN PLANNING IS NEEDED (needsPlanning: true)
+- Confirmatory follow-ups with prior context: "yes", "sure", "okay", "go ahead", "do it", "send it", "continue"
 - New data queries: "show me top ads", "compare my ads"
 - Analysis requests: "why is X performing well", "analyze my creatives"
 - Complex comparisons requiring multiple data fetches
@@ -75,6 +107,10 @@ Output: {"passed": false, "needsPlanning": false, "directResponse": null, "viola
      * Check user input and determine routing
      */
     async check(userInput: string, context: GlobalContext): Promise<GuardrailResult> {
+        if (isConfirmatoryFollowup(userInput) && hasMeaningfulContext(context)) {
+            return { passed: true, needsPlanning: true };
+        }
+
         const contextSummary = getContextSummary(context);
         
         const input = `
@@ -139,4 +175,3 @@ Analyze the user input and return your decision.
 }
 
 export const guardrailTool = new GuardrailToolWrapper();
-

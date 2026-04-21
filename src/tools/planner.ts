@@ -63,9 +63,16 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 ### 7. generateAdVariations
 - **Purpose**: Generate new ad concept variations (images and video scripts) based on creative insights
 - **Capabilities**: For each analyzed item — generates multiple ad concepts with AI-generated images (for image ads) or video scripts (for video ads)
-- **Output**: Image thumbnails row (8 concepts) for image ads, or video script cards (4 concepts) for video ads
+- **Output**: Image thumbnails row (4 concepts) for image ads, or video script cards (4 concepts) for video ads
 - **Use when**: User wants to generate new ad ideas, create ad variations, iterate on existing creatives, get inspiration for new ads
 - **REQUIRES**: Must run AFTER creativeInsights — needs creative reports in context
+
+### 8. integrations
+- **Purpose**: Access connected workspace integrations or return connection instructions when they are not connected
+- **Capabilities**: Returns integration context for connected integrations like Slack, Notion, Google Drive, Shopify, Google Analytics, Meta Ads, and TikTok Ads
+- **Output**: Returns integration data OR connection instructions if the integration is available but not connected OR a coming-soon notice
+- **Use when**: User asks for data or actions involving workspace integrations, external briefs, docs, CRM/store context, or posting/sharing results
+- **Important**: If an integration is available but not connected, use this tool to return connection instructions instead of failing the whole plan
 
 ## PLANNING RULES
 
@@ -91,12 +98,22 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 1. First analyze the ads (dataQuery → dataAnalysis → focusItems → creativeInsights)
 2. Then generate variations with generateAdVariations as the final step
 3. generateAdVariations ALWAYS comes after creativeInsights — it needs creative reports
+4. Default to a single source ad for variation generation unless the user explicitly asks for multiple ads
+
+### For Integration Requests:
+1. Use integrations when the user explicitly asks for Slack, Notion, Google Drive, Shopify, Google Analytics, HubSpot, Salesforce, Meta Ads, or TikTok Ads
+2. The current context tells you which integrations are connected right now
+3. If the user asks for an integration that is available but not connected, plan an integrations step that returns connection instructions
+4. If the user asks for a coming-soon integration, plan an integrations step that explains that status
+5. If the request has other independent work, continue with those other steps after the integrations step
+6. Do not use dataQuery/discoveryQuery as a substitute for workspace integrations like Slack, Notion, Google Drive, Shopify, or Google Analytics
 
 ### General Rules:
 - Keep plans concise - avoid redundant steps
 - Match the user's intent - "top" = sort desc, "worst" = sort asc
 - For competitor analysis, always include dataAnalysis to show what was found
 - When user asks to "generate", "create", "make" ad ideas/variations/concepts, include generateAdVariations
+- When user asks for external integration context or actions, include integrations
 
 ## DERIVING THE OBJECTIVE
 The objective field is crucial - it must be a clear, actionable statement of what to accomplish.
@@ -287,6 +304,43 @@ User: "Create new ad variations for my best performing video ads"
         { "id": "4", "tool": "creativeInsights", "description": "Analyze video creative elements and scripts" },
         { "id": "5", "tool": "generateAdVariations", "description": "Generate new video script concepts based on analysis" }
     ]
+}
+
+User: "Pull the latest creative brief from Google Drive"
+{
+    "objective": "Retrieve the latest creative brief from Google Drive",
+    "steps": [
+        { "id": "1", "tool": "integrations", "description": "Fetch the most relevant recent creative brief from Google Drive" }
+    ]
+}
+
+User: "Use Shopify context and analyze my top ads"
+{
+    "objective": "Use Shopify context to enrich analysis of top performing ads",
+    "steps": [
+        { "id": "1", "tool": "integrations", "description": "Retrieve recent Shopify sales signals or return connection instructions if Shopify is not connected" },
+        { "id": "2", "tool": "dataQuery", "description": "Query top ads by ROAS" },
+        { "id": "3", "tool": "dataAnalysis", "description": "Analyze top ad performance with any available Shopify context" }
+    ]
+}
+
+User: "Post these findings to Slack and keep analyzing my top creatives"
+{
+    "objective": "Share findings to Slack and continue analyzing top creatives",
+    "steps": [
+        { "id": "1", "tool": "integrations", "description": "Post or prepare a Slack update with the current findings, or return connection instructions if Slack is not connected" },
+        { "id": "2", "tool": "dataQuery", "description": "Query top performing ads by ROAS" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 3 ads" },
+        { "id": "4", "tool": "creativeInsights", "description": "Analyze the creative elements of the top ads" }
+    ]
+}
+
+User: "Check HubSpot for CRM context"
+{
+    "objective": "Determine whether HubSpot context can be used for this request",
+    "steps": [
+        { "id": "1", "tool": "integrations", "description": "Check HubSpot availability and return connection or availability instructions" }
+    ]
 }`
         });
     }
@@ -363,4 +417,3 @@ INSTRUCTIONS:
 }
 
 export const plannerTool = new PlannerToolWrapper();
-

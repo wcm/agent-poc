@@ -60,6 +60,19 @@ export interface ReportEvent {
     itemData?: ReportItemData;
 }
 
+export type IntegrationResultStatus = 'connected' | 'available' | 'coming_soon' | 'unknown';
+
+export interface IntegrationResultEvent {
+    type: 'integration_result';
+    resultId: string;
+    integrationId: string;
+    integrationName: string;
+    title: string;
+    status: IntegrationResultStatus;
+    mode: 'data' | 'instruction';
+    content: string;
+}
+
 // Focused items event
 export interface FocusedItemsEvent {
     type: 'focused_items';
@@ -141,6 +154,7 @@ export type SSEEvent =
     | PlanEvent 
     | PlanStatusEvent 
     | ReportEvent 
+    | IntegrationResultEvent
     | FocusedItemsEvent 
     | ContextUpdateEvent 
     | DoneEvent
@@ -203,6 +217,7 @@ export type StreamedSection =
     | { type: 'text'; content: string }
     | { type: 'plan'; planId: string; agentName: string; title: string; tasks: PlanTask[] }
     | { type: 'report'; reportType: 'performance' | 'creative' | 'common'; reportId: string; title: string; content: string; itemId?: string; itemName?: string; itemData?: ReportItemData }
+    | { type: 'integration_result'; resultId: string; integrationId: string; integrationName: string; title: string; status: IntegrationResultStatus; mode: 'data' | 'instruction'; content: string }
     | { type: 'focused_items'; items: FocusedItemCard[] }
     | { type: 'image_concepts'; itemId: string; itemName: string; concepts: ImageConcept[] }
     | { type: 'video_concepts'; itemId: string; itemName: string; concepts: VideoConcept[] };
@@ -216,6 +231,8 @@ export interface Message {
     sections?: StreamedSection[];
 }
 
+export type SessionStatus = "idle" | "running" | "completed" | "failed";
+
 /**
  * Session with context
  */
@@ -224,7 +241,13 @@ export interface Session {
     title: string;
     messages: Message[];
     createdAt: number;
+    lastActivityAt: number;
     context: SessionContext;
+    status: SessionStatus;
+    isRead: boolean;
+    completedAt: number | null;
+    streamingSections: StreamedSection[];
+    planTaskStates: Record<string, PlanTask[]>;
 }
 
 /**
@@ -258,6 +281,8 @@ export interface Channel {
     account_id: string;
     is_connected: boolean;
 }
+
+export type AnalyticsDashboardView = "top_spend" | "top_videos" | "top_images";
 
 /**
  * Brand and Ad types

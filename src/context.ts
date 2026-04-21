@@ -1,4 +1,5 @@
-import { ChannelInfo, FocusedItemCard, TaskStatus, BrandInfo, ImageConcept, VideoConcept } from './types';
+import { ChannelInfo, FocusedItemCard, TaskStatus, BrandInfo, ImageConcept, VideoConcept, FrontendIntegrationInfo, IntegrationInfo, IntegrationResultRecord } from './types';
+import { resolveIntegrations } from './integrations';
 
 /**
  * Query parameters for data fetching
@@ -162,7 +163,7 @@ export interface GenerationResult {
  */
 export interface PlanStep {
     id: string;
-    tool: 'dataQuery' | 'dataAnalysis' | 'focusItems' | 'creativeInsights' | 'consolidateFindings' | 'discoveryQuery' | 'generateAdVariations';
+    tool: 'dataQuery' | 'dataAnalysis' | 'focusItems' | 'creativeInsights' | 'consolidateFindings' | 'discoveryQuery' | 'generateAdVariations' | 'integrations';
     description: string;
     status: TaskStatus;
 }
@@ -186,6 +187,9 @@ export interface GlobalContext {
     
     // User-selected followed brands (from context selector)
     followedBrands: BrandInfo[];
+
+    // Connected and supported workspace integrations
+    integrations: IntegrationInfo[];
     
     // User's original input
     userInput: string;
@@ -210,6 +214,9 @@ export interface GlobalContext {
     
     // Ad generation results (image concepts + video scripts)
     generationResults: GenerationResult[];
+
+    // Results from mocked integration calls
+    integrationResults: IntegrationResultRecord[];
     
     // Narrator messages for follow-up context
     narratorHistory: string[];
@@ -227,6 +234,8 @@ export interface GlobalContext {
 export interface UserContext {
     channel?: ChannelInfo;
     brands?: BrandInfo[];
+    integrations?: FrontendIntegrationInfo[];
+    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 /**
@@ -236,6 +245,7 @@ export function createEmptyContext(channel: ChannelInfo, userInput: string = '',
     return {
         channel,
         followedBrands: userContext?.brands || [],
+        integrations: resolveIntegrations(userContext?.integrations || []),
         userInput,
         dataSets: [],
         discoveryDataSets: [],
@@ -244,8 +254,9 @@ export function createEmptyContext(channel: ChannelInfo, userInput: string = '',
         creativeReports: [],
         consolidationReports: [],
         generationResults: [],
+        integrationResults: [],
         narratorHistory: [],
-        conversationHistory: [],
+        conversationHistory: userContext?.conversationHistory || [],
         currentPlan: null
     };
 }
@@ -328,6 +339,30 @@ export function getContextSummary(context: GlobalContext): string {
             parts.push(`  - ${brand.name}${brand.category ? ` (${brand.category})` : ''}`);
         });
     }
+
+    if (context.integrations.length > 0) {
+        const connected = context.integrations.filter((integration) => integration.status === 'connected');
+        const available = context.integrations.filter((integration) => integration.status === 'available');
+        const comingSoon = context.integrations.filter((integration) => integration.status === 'coming_soon');
+
+        parts.push(`\nWorkspace Integrations:`);
+        if (connected.length > 0) {
+            parts.push(`  Connected:`);
+            connected.forEach((integration) => {
+                parts.push(`    - ${integration.name}: ${integration.capabilities.join(', ')}`);
+            });
+        } else {
+            parts.push(`  Connected: none`);
+        }
+
+        if (available.length > 0) {
+            parts.push(`  Available but not connected: ${available.map((integration) => integration.name).join(', ')}`);
+        }
+
+        if (comingSoon.length > 0) {
+            parts.push(`  Coming soon: ${comingSoon.map((integration) => integration.name).join(', ')}`);
+        }
+    }
     
     if (context.dataSets.length > 0) {
         parts.push(`\nOwn Ad Data Sets: ${context.dataSets.length}`);
@@ -369,6 +404,13 @@ export function getContextSummary(context: GlobalContext): string {
             parts.push(`  [${i + 1}] ${gr.itemName} (${gr.type}, ${count} concepts)`);
         });
     }
+
+    if (context.integrationResults.length > 0) {
+        parts.push(`\nRecent Integration Results:`);
+        context.integrationResults.slice(-3).forEach((result, i) => {
+            parts.push(`  [${i + 1}] ${result.integrationName} (${result.mode})`);
+        });
+    }
     
     if (context.conversationHistory.length > 0) {
         parts.push(`\nRecent Conversation:`);
@@ -395,4 +437,3 @@ export function addToHistory(context: GlobalContext, role: 'user' | 'assistant',
 export function generateId(prefix: string): string {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
-

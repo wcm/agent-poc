@@ -1,8 +1,8 @@
 import React from "react";
-import { StreamedSection, PlanTask } from "../../types";
+import { ImageConcept, StreamedSection, PlanTask, VideoConcept } from "../../types";
 import TextSection from "./TextSection";
-import PlanTimeline from "./PlanTimeline";
 import ReportCard from "./ReportCard";
+import IntegrationCard from "./IntegrationCard";
 import FocusedItemsGrid from "./FocusedItemsGrid";
 import ImageConceptsRow from "./ImageConceptsRow";
 import VideoConceptsRow from "./VideoConceptsRow";
@@ -10,13 +10,24 @@ import VideoConceptsRow from "./VideoConceptsRow";
 interface StreamingMessageProps {
 	sections: StreamedSection[];
 	planStates: Map<string, PlanTask[]>; // Map of planId -> current task states
-	hidePlan?: boolean; // Whether to hide plan sections (when shown sticky)
+	activeDocumentId?: string | null;
+	onOpenReport?: (section: Extract<StreamedSection, { type: "report" }>) => void;
+	onOpenImageConcept?: (itemId: string, itemName: string, concept: ImageConcept, index: number) => void;
+	onOpenVideoConcept?: (itemId: string, itemName: string, concept: VideoConcept, index: number) => void;
 }
 
 /**
  * Render a single section by type
  */
-const renderSection = (section: StreamedSection, index: number, planStates: Map<string, PlanTask[]>) => {
+const renderSection = (
+	section: StreamedSection,
+	index: number,
+	planStates: Map<string, PlanTask[]>,
+	activeDocumentId?: string | null,
+	onOpenReport?: (section: Extract<StreamedSection, { type: "report" }>) => void,
+	onOpenImageConcept?: (itemId: string, itemName: string, concept: ImageConcept, index: number) => void,
+	onOpenVideoConcept?: (itemId: string, itemName: string, concept: VideoConcept, index: number) => void
+) => {
 	switch (section.type) {
 		case "text":
 			return <TextSection key={`text-${index}`} content={section.content} />;
@@ -31,6 +42,22 @@ const renderSection = (section: StreamedSection, index: number, planStates: Map<
 					content={section.content}
 					itemName={section.itemName}
 					itemData={section.itemData}
+					isActive={activeDocumentId === `report:${section.reportId}`}
+					onOpen={() => onOpenReport?.(section)}
+				/>
+			);
+
+		case "integration_result":
+			return (
+				<IntegrationCard
+					key={`integration-${section.resultId}`}
+					resultId={section.resultId}
+					integrationId={section.integrationId}
+					integrationName={section.integrationName}
+					title={section.title}
+					status={section.status}
+					mode={section.mode}
+					content={section.content}
 				/>
 			);
 
@@ -38,48 +65,44 @@ const renderSection = (section: StreamedSection, index: number, planStates: Map<
 			return <FocusedItemsGrid key={`items-${index}`} title="Focus Items" items={section.items} />;
 
 		case "image_concepts":
-			return <ImageConceptsRow key={`img-concepts-${section.itemId}`} itemName={section.itemName} concepts={section.concepts} />;
+			return (
+				<ImageConceptsRow
+					key={`img-concepts-${section.itemId}`}
+					itemId={section.itemId}
+					itemName={section.itemName}
+					concepts={section.concepts}
+					activeDocumentId={activeDocumentId}
+					onOpenConcept={onOpenImageConcept}
+				/>
+			);
 
 		case "video_concepts":
-			return <VideoConceptsRow key={`vid-concepts-${section.itemId}`} itemName={section.itemName} concepts={section.concepts} />;
+			return (
+				<VideoConceptsRow
+					key={`vid-concepts-${section.itemId}`}
+					itemId={section.itemId}
+					itemName={section.itemName}
+					concepts={section.concepts}
+					activeDocumentId={activeDocumentId}
+					onOpenConcept={onOpenVideoConcept}
+				/>
+			);
 
 		default:
 			return null;
 	}
 };
 
-/**
- * StreamingMessage renders a collection of streamed sections
- * If a plan exists, renders two-column layout with plan on left, content on right
- */
-const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planStates, hidePlan = false }) => {
+const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept }) => {
 	if (sections.length === 0) {
 		return null;
 	}
 
-	// Find plan section and separate content sections
-	const planSection = sections.find((s) => s.type === "plan");
-	const contentSections = sections.filter((s) => s.type !== "plan");
+	const contentSections = sections.filter((section) => section.type !== "plan");
 
-	// If we have a plan and should show it, use two-column layout
-	if (planSection && planSection.type === "plan" && !hidePlan) {
-		const tasks = planStates.get(planSection.planId) || planSection.tasks;
-
-		return (
-			<div className="response-with-plan">
-				<div className="plan-column">
-					<PlanTimeline planId={planSection.planId} agentName={planSection.agentName} title={planSection.title} tasks={tasks} />
-				</div>
-				<div className="content-column">{contentSections.map((section, index) => renderSection(section, index, planStates))}</div>
-			</div>
-		);
-	}
-
-	// No plan or plan is hidden - render content normally
 	return (
 		<div className="response-with-plan">
-			<div className="plan-column"></div>
-			<div className="content-column">{contentSections.map((section, index) => renderSection(section, index, planStates))}</div>
+			{contentSections.map((section, index) => renderSection(section, index, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept))}
 		</div>
 	);
 };

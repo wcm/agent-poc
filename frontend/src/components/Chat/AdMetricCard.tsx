@@ -6,6 +6,7 @@ interface AdMetricCardProps {
 	item?: FocusedItemCard;
 	itemData?: ReportItemData;
 	itemName?: string;
+	layout?: "vertical" | "horizontal";
 }
 
 const formatNumber = (value: number | undefined): string => {
@@ -27,7 +28,7 @@ const formatPercentage = (value: number | undefined): string => {
 	return `${value.toFixed(2)}%`;
 };
 
-const AdMetricCard: React.FC<AdMetricCardProps> = ({ item, itemData, itemName }) => {
+const AdMetricCard: React.FC<AdMetricCardProps> = ({ item, itemData, itemName, layout = "vertical" }) => {
 	// Support both FocusedItemCard and ReportItemData
 	const thumbnail = item?.thumbnail || itemData?.thumbnail;
 	const name = item?.name || itemName || "";
@@ -38,7 +39,7 @@ const AdMetricCard: React.FC<AdMetricCardProps> = ({ item, itemData, itemName })
 	const isVideo = displayFormat === "video";
 
 	return (
-		<div className="metric-card">
+		<div className={`metric-card ${layout === "horizontal" ? "metric-card-horizontal" : ""}`}>
 			<div className="metric-card-thumbnail">
 				{thumbnail ? (
 					<>
@@ -56,40 +57,42 @@ const AdMetricCard: React.FC<AdMetricCardProps> = ({ item, itemData, itemName })
 					</div>
 				)}
 			</div>
-			<div className="metric-card-name" title={name}>
-				{name}
-			</div>
-			<div className="metric-card-metrics">
-				{metrics.cost_per_lead !== undefined && (
-					<div className="metric-row">
-						<span className="metric-label">Cost per lead</span>
-						<span className="metric-value">{formatCurrency(metrics.cost_per_lead)}</span>
-					</div>
-				)}
-				{metrics.spend !== undefined && (
-					<div className="metric-row">
-						<span className="metric-label">Spend</span>
-						<span className="metric-value">{formatCurrency(metrics.spend)}</span>
-					</div>
-				)}
-				{metrics.roas !== undefined && (
-					<div className="metric-row">
-						<span className="metric-label">ROAS</span>
-						<span className="metric-value">{formatNumber(metrics.roas)}</span>
-					</div>
-				)}
-				{metrics.ctr !== undefined && (
-					<div className="metric-row">
-						<span className="metric-label">CTR</span>
-						<span className="metric-value">{formatPercentage(metrics.ctr)}</span>
-					</div>
-				)}
-				{metrics.impressions !== undefined && (
-					<div className="metric-row">
-						<span className="metric-label">Impressions</span>
-						<span className="metric-value">{formatNumber(metrics.impressions)}</span>
-					</div>
-				)}
+			<div className="metric-card-content">
+				<div className="metric-card-name" title={name}>
+					{name}
+				</div>
+				<div className="metric-card-metrics">
+					{metrics.cost_per_lead !== undefined && (
+						<div className="metric-row">
+							<span className="metric-label">Cost per lead</span>
+							<span className="metric-value">{formatCurrency(metrics.cost_per_lead)}</span>
+						</div>
+					)}
+					{metrics.spend !== undefined && (
+						<div className="metric-row">
+							<span className="metric-label">Spend</span>
+							<span className="metric-value">{formatCurrency(metrics.spend)}</span>
+						</div>
+					)}
+					{metrics.roas !== undefined && (
+						<div className="metric-row">
+							<span className="metric-label">ROAS</span>
+							<span className="metric-value">{formatNumber(metrics.roas)}</span>
+						</div>
+					)}
+					{metrics.ctr !== undefined && (
+						<div className="metric-row">
+							<span className="metric-label">CTR</span>
+							<span className="metric-value">{formatPercentage(metrics.ctr)}</span>
+						</div>
+					)}
+					{metrics.impressions !== undefined && (
+						<div className="metric-row">
+							<span className="metric-label">Impressions</span>
+							<span className="metric-value">{formatNumber(metrics.impressions)}</span>
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
 	);

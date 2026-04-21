@@ -4,6 +4,7 @@ import cors from 'cors';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
 import { Agent } from './agent';
+import { UserContext } from './context';
 import { logger } from './utils/logger';
 
 dotenv.config();
@@ -42,209 +43,6 @@ const writeJson = async (filename: string, data: any) => {
     await fs.promises.writeFile(path.join(DATA_DIR, filename), JSON.stringify(data, null, 4), 'utf-8');
 };
 
-const USER_QUERY_DATA_PATH = path.join(process.cwd(), 'src', 'data', 'conversations_tagged.json');
-
-type UserQueryRecord = {
-    user_id?: string;
-    text?: string;
-    created_at?: string;
-    recurring_plan_type?: string;
-    suggested?: string;
-    tags?: Array<{ category?: string; topic?: string }>;
-};
-
-/** Flatten conversations_tagged.json to one record per user message (assistant messages ignored). */
-function flattenConversationsToUserRecords(conversations: any[]): UserQueryRecord[] {
-    const records: UserQueryRecord[] = [];
-    for (const conv of conversations) {
-        const messages = conv.messages ?? [];
-        for (const msg of messages) {
-            if (msg.type !== 'user') continue;
-            records.push({
-                user_id: conv.user_id,
-                text: msg.content,
-                created_at: msg.created_at,
-                recurring_plan_type: conv.recurring_plan_type,
-                tags: msg.tags,
-                suggested: msg.suggested ?? 'no',
-            });
-        }
-    }
-    return records;
-}
-
-const normalizePlanType = (value?: string | null) => {
-    if (!value || typeof value !== 'string') {
-        return 'unknown';
-    }
-    return value.replace(/^(month_|year_)/, '');
-};
-
-const normalizeDateString = (value?: string | null) => {
-    if (!value || typeof value !== 'string') {
-        return null;
-    }
-    const [datePart, timePart] = value.trim().split(' ');
-    if (!datePart || !timePart) {
-        return null;
-    }
-    const [time, fractional] = timePart.split('.');
-    const ms = fractional ? fractional.slice(0, 3).padEnd(3, '0') : '000';
-    return `${datePart}T${time}.${ms}`;
-};
-
-const parseCreatedAt = (value?: string | null) => {
-    const normalized = normalizeDateString(value);
-    if (!normalized) {
-        return null;
-    }
-    const parsed = new Date(normalized);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const parseDateRange = (value?: string | null, isEnd?: boolean) => {
-    if (!value) {
-        return null;
-    }
-    const suffix = isEnd ? 'T23:59:59.999' : 'T00:00:00.000';
-    const parsed = new Date(`${value}${suffix}`);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const loadUserQueryData = (): UserQueryRecord[] => {
-    const raw = fs.readFileSync(USER_QUERY_DATA_PATH, 'utf-8');
-    const conversations = JSON.parse(raw);
-    if (!Array.isArray(conversations)) {
-        return [];
-    }
-    return flattenConversationsToUserRecords(conversations);
-};
-
-const matchesTag = (record: UserQueryRecord, category?: string | null, topic?: string | null) => {
-    if (!category && !topic) {
-        return true;
-    }
-    const tags = Array.isArray(record.tags) ? record.tags : [];
-    if (category && topic) {
-        return tags.some((tag) => tag.category === category && tag.topic === topic);
-    }
-    if (category) {
-        return tags.some((tag) => tag.category === category);
-    }
-    return tags.some((tag) => tag.topic === topic);
-};
-
-const userQueryRouter = express.Router();
-
-userQueryRouter.get('/metadata', (_req: Request, res: Response) => {
-    try {
-        const data = loadUserQueryData();
-        const categories = new Set<string>();
-        const topics = new Set<string>();
-        const recurringPlans = new Set<string>();
-        const suggestedValues = new Set<string>();
-        let minDate: Date | null = null;
-        let maxDate: Date | null = null;
-
-        data.forEach((record) => {
-            const createdAt = parseCreatedAt(record.created_at);
-            if (createdAt) {
-                if (!minDate || createdAt < minDate) {
-                    minDate = createdAt;
-                }
-                if (!maxDate || createdAt > maxDate) {
-                    maxDate = createdAt;
-                }
-            }
-
-            recurringPlans.add(normalizePlanType(record.recurring_plan_type));
-            if (record.suggested) {
-                suggestedValues.add(record.suggested);
-            } else {
-                suggestedValues.add('no');
-            }
-
-            const tags = Array.isArray(record.tags) ? record.tags : [];
-            tags.forEach((tag) => {
-                if (tag.category) {
-                    categories.add(tag.category);
-                }
-                if (tag.topic) {
-                    topics.add(tag.topic);
-                }
-            });
-        });
-
-        const minDateValue = minDate ? (minDate as Date).toISOString().slice(0, 10) : null;
-        const maxDateValue = maxDate ? (maxDate as Date).toISOString().slice(0, 10) : null;
-
-        res.json({
-            categories: Array.from(categories).sort(),
-            topics: Array.from(topics).sort(),
-            recurring_plan_type: Array.from(recurringPlans).sort(),
-            suggested: Array.from(suggestedValues).sort(),
-            min_date: minDateValue,
-            max_date: maxDateValue,
-        });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to load metadata.' });
-    }
-});
-
-userQueryRouter.get('/records', (req: Request, res: Response) => {
-    try {
-        const data = loadUserQueryData();
-        const {
-            date_from,
-            date_to,
-            category,
-            topic,
-            suggested,
-            recurring_plan_type,
-        } = req.query as Record<string, string | undefined>;
-
-        const startDate = parseDateRange(date_from, false);
-        const endDate = parseDateRange(date_to, true);
-
-        const filtered = data.filter((record) => {
-            if (recurring_plan_type) {
-                const normalizedPlan = normalizePlanType(record.recurring_plan_type);
-                if (normalizedPlan !== recurring_plan_type) {
-                    return false;
-                }
-            }
-            if (suggested && record.suggested !== suggested) {
-                return false;
-            }
-            if (!matchesTag(record, category, topic)) {
-                return false;
-            }
-
-            if (startDate || endDate) {
-                const createdAt = parseCreatedAt(record.created_at);
-                if (!createdAt) {
-                    return false;
-                }
-                if (startDate && createdAt < startDate) {
-                    return false;
-                }
-                if (endDate && createdAt > endDate) {
-                    return false;
-                }
-            }
-
-            return true;
-        });
-
-        res.json({ records: filtered });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to load records.' });
-    }
-});
-
-app.use('/user-query-analysis/api', userQueryRouter);
-
-
 app.get('/api/stream', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -256,7 +54,7 @@ app.get('/api/stream', async (req: Request, res: Response) => {
     const sessionId = (req.query.sessionId as string) || 'default';
     
     // Parse user-provided context (channel and brands)
-    let userContext: { channel?: any; brands?: any[] } | undefined;
+    let userContext: UserContext | undefined;
     if (req.query.context) {
         try {
             userContext = JSON.parse(req.query.context as string);
@@ -299,8 +97,21 @@ app.post('/api/clear', (req: Request, res: Response) => {
         agents.get(sessionId)?.clearHistory();
         agents.delete(sessionId);
         logger.session(sessionId, 'DELETE');
+        res.json({ message: 'Session cleared' });
+        return;
     }
-    res.json({ message: 'Session cleared' });
+
+    if (!sessionId) {
+        agents.forEach((agent, id) => {
+            agent.clearHistory();
+            logger.session(id, 'DELETE');
+        });
+        agents.clear();
+        res.json({ message: 'All sessions cleared' });
+        return;
+    }
+
+    res.json({ message: 'Session not found' });
 });
 
 // --- Brand & Discovery Data Endpoints ---
@@ -621,14 +432,6 @@ app.post('/api/channels/:id/connect', async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to connect channel' });
     }
 });
-
-const userQueryDist = path.join(__dirname, '../user-query-analysis/dist');
-if (fs.existsSync(userQueryDist)) {
-    app.use('/user-query-analysis', express.static(userQueryDist));
-    app.get(/^\/user-query-analysis(\/.*)?$/, (_req, res) => {
-        res.sendFile(path.join(userQueryDist, 'index.html'));
-    });
-}
 
 // Anything that doesn't match the above, send back index.html
 app.get(/.*/, (req, res) => {

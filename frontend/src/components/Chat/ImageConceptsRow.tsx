@@ -1,11 +1,13 @@
-import React, { useState } from "react";
+import React from "react";
 import { Image as ImageIcon, AlertCircle } from "lucide-react";
 import { ImageConcept } from "../../types";
-import ImageConceptModal from "./ImageConceptModal";
 
 interface ImageConceptsRowProps {
+	itemId: string;
 	itemName: string;
 	concepts: ImageConcept[];
+	activeDocumentId?: string | null;
+	onOpenConcept?: (itemId: string, itemName: string, concept: ImageConcept, index: number) => void;
 }
 
 const renderThumbnailContent = (concept: ImageConcept) => {
@@ -49,41 +51,30 @@ const renderThumbnailContent = (concept: ImageConcept) => {
 	}
 };
 
-const ImageConceptsRow: React.FC<ImageConceptsRowProps> = ({ itemName, concepts }) => {
-	const [selectedConcept, setSelectedConcept] = useState<ImageConcept | null>(null);
-
-	const handleClick = (concept: ImageConcept) => {
-		if (concept.status === "done") {
-			setSelectedConcept(concept);
-		}
-	};
-
+const ImageConceptsRow: React.FC<ImageConceptsRowProps> = ({ itemId, itemName, concepts, activeDocumentId, onOpenConcept }) => {
 	return (
-		<>
-			<div className="image-concepts-container">
-				<div className="image-concepts-header">
-					<ImageIcon size={14} />
-					<span>Ad Concepts: {itemName}</span>
-					<span className="image-concepts-count">{concepts.length} concepts</span>
-				</div>
-				<div className="image-concepts-row">
-					{concepts.map((concept, index) => (
+		<div className="image-concepts-container">
+			<div className="image-concepts-header">
+				<ImageIcon size={14} />
+				<span>Ad Concepts: {itemName}</span>
+				<span className="image-concepts-count">{concepts.length} concepts</span>
+			</div>
+			<div className="image-concepts-row">
+				{concepts.map((concept, index) => {
+					const documentId = `image:${itemId}:${index}`;
+					return (
 						<div
-							key={index}
-							className={`image-concept-thumbnail ${concept.status === "done" ? "clickable" : ""}`}
-							onClick={() => handleClick(concept)}
-							title={concept.status === "done" ? concept.concept_name : undefined}
+							key={documentId}
+							className={`image-concept-thumbnail clickable ${activeDocumentId === documentId ? "is-active" : ""}`}
+							onClick={() => onOpenConcept?.(itemId, itemName, concept, index)}
+							title={concept.concept_name || `Concept ${index + 1}`}
 						>
 							{renderThumbnailContent(concept)}
 						</div>
-					))}
-				</div>
+					);
+				})}
 			</div>
-
-			{selectedConcept && (
-				<ImageConceptModal concept={selectedConcept} onClose={() => setSelectedConcept(null)} />
-			)}
-		</>
+		</div>
 	);
 };
 

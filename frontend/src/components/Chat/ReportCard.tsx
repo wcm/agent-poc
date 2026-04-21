@@ -1,7 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
 import { FileText, TrendingUp, Lightbulb, Sparkles, Play } from "lucide-react";
-import DocumentModal from "./DocumentModal";
-import CreativeReportModal from "./CreativeReportModal";
 import { ReportItemData } from "../../types";
 
 interface ReportCardProps {
@@ -11,6 +9,8 @@ interface ReportCardProps {
 	content: string;
 	itemName?: string;
 	itemData?: ReportItemData;
+	isActive?: boolean;
+	onOpen?: () => void;
 }
 
 const getReportIcon = (reportType: ReportCardProps["reportType"]) => {
@@ -39,9 +39,7 @@ const getReportTypeLabel = (reportType: ReportCardProps["reportType"]) => {
 	}
 };
 
-const ReportCard: React.FC<ReportCardProps> = ({ reportType, reportId, title, content, itemName, itemData }) => {
-	const [isModalOpen, setIsModalOpen] = useState(false);
-
+const ReportCard: React.FC<ReportCardProps> = ({ reportType, title, content, itemName, itemData, isActive = false, onOpen }) => {
 	// Get first few lines for preview, join with spaces for compact display
 	const preview = content
 		.split("\n")
@@ -54,38 +52,30 @@ const ReportCard: React.FC<ReportCardProps> = ({ reportType, reportId, title, co
 	const showThumbnail = reportType === "creative" && itemData?.thumbnail;
 
 	return (
-		<>
-			<div className={`report-card ${reportType} ${showThumbnail ? "with-thumbnail" : ""}`} onClick={() => setIsModalOpen(true)}>
-				{showThumbnail && (
-					<div className="report-card-thumbnail">
-						<img src={itemData.thumbnail} alt={itemName || title} />
-						{itemData.displayFormat === "video" && (
-							<div className="thumbnail-video-indicator">
-								<Play size={12} fill="white" />
-							</div>
-						)}
-					</div>
-				)}
-				<div className="report-card-content">
-					<div className="report-card-header">
-						<div className="report-card-titles">
-							<span className="report-title">{title}</span>
+		<div className={`report-card ${reportType} ${showThumbnail ? "with-thumbnail" : ""} ${isActive ? "is-active" : ""}`} onClick={onOpen}>
+			{showThumbnail && (
+				<div className="report-card-thumbnail">
+					<img src={itemData.thumbnail} alt={itemName || title} />
+					{itemData.displayFormat === "video" && (
+						<div className="thumbnail-video-indicator">
+							<Play size={12} fill="white" />
 						</div>
-						<div className={`report-type-badge ${reportType}`}>
-							{getReportTypeLabel(reportType)}
-							{getReportIcon(reportType)}
-						</div>
-					</div>
-					<div className="report-card-preview">{preview}</div>
+					)}
 				</div>
+			)}
+			<div className="report-card-content">
+				<div className="report-card-header">
+					<div className="report-card-titles">
+						<span className="report-title">{title}</span>
+					</div>
+					<div className={`report-type-badge ${reportType}`}>
+						{getReportTypeLabel(reportType)}
+						{getReportIcon(reportType)}
+					</div>
+				</div>
+				<div className="report-card-preview">{preview}</div>
 			</div>
-			{isModalOpen &&
-				(reportType === "creative" && itemData ? (
-					<CreativeReportModal title={title} content={content} itemName={itemName || title} itemData={itemData} onClose={() => setIsModalOpen(false)} />
-				) : (
-					<DocumentModal title={title} content={content} onClose={() => setIsModalOpen(false)} />
-				))}
-		</>
+		</div>
 	);
 };
 

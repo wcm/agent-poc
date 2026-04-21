@@ -10,6 +10,7 @@ import {
     addToHistory,
     generateId
 } from './context';
+import { getConnectedIntegrationInputs, resolveIntegrations } from './integrations';
 import { 
     SSEEvent, 
     StreamEmitter, 
@@ -25,6 +26,7 @@ import { focusItemsTool } from './tools/focus-items';
 import { creativeInsightsTool } from './tools/creative-insights';
 import { consolidateFindingsTool } from './tools/consolidate-findings';
 import { generateAdVariationsTool } from './tools/generate-ad-variations';
+import { integrationsTool } from './tools/integrations';
 import { narratorTool } from './tools/narrator';
 import { logger } from './utils/logger';
 
@@ -116,13 +118,19 @@ export class Agent extends EventEmitter {
                 activeChannel = this.getChannelInfo(channelId);
             }
 
+            const connectedIntegrationInputs = userContext?.integrations || getConnectedIntegrationInputs(this.context.integrations);
+
             // Initialize/update context
             if (!this.initialized || this.context.channel.id !== activeChannel.id) {
-                this.context = createEmptyContext(activeChannel, userInput, userContext);
+                this.context = createEmptyContext(activeChannel, userInput, {
+                    ...userContext,
+                    integrations: connectedIntegrationInputs
+                });
                 this.initialized = true;
             } else {
                 this.context.userInput = userInput;
                 this.context.channel = activeChannel;
+                this.context.integrations = resolveIntegrations(connectedIntegrationInputs);
                 // Update followed brands if provided
                 if (userContext?.brands) {
                     this.context.followedBrands = userContext.brands;
@@ -378,9 +386,23 @@ export class Agent extends EventEmitter {
                 return `Generated ad variations for ${result.results.length} items`;
             }
 
+            case 'integrations': {
+                const result = await integrationsTool.execute(step.description, this.context);
+                this.stream({
+                    type: 'integration_result',
+                    resultId: result.result.id,
+                    integrationId: result.result.integrationId,
+                    integrationName: result.result.integrationName,
+                    title: result.result.title,
+                    status: result.result.status,
+                    mode: result.result.mode,
+                    content: result.result.content
+                });
+                return result.result.title;
+            }
+
             default:
                 throw new Error(`Unknown tool: ${step.tool}`);
         }
     }
 }
-

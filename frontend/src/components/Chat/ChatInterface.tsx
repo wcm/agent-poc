@@ -1,155 +1,187 @@
-import React, { useRef, useEffect, useState, useCallback } from "react";
-import { ArrowUp, X, BarChart3, Sparkles, Eye, Compass, Wand2, LucideIcon } from "lucide-react";
-import { Message, StreamedSection, PlanTask, Channel, Brand } from "../../types";
+import React, { useRef, useEffect, useState, useCallback, useMemo, useLayoutEffect } from "react";
+import { ArrowUp, Sparkles, LucideIcon, Plus, ImageIcon, FileText, Heart } from "lucide-react";
+import { Channel, Message, StreamedSection, PlanTask, ImageConcept, VideoConcept } from "../../types";
 import StreamingMessage from "./StreamingMessage";
-import ContextSelector from "./ContextSelector";
 import { MessageContent } from "../../MessageContent";
+import PlanTimeline from "./PlanTimeline";
+import DocumentPanel, { ChatDocument } from "./DocumentPanel";
+import AssistantStreamingIndicator, { AssistantStreamingPhase } from "./AssistantStreamingIndicator";
+import { QUICK_ADD_INTEGRATION_IDS, ResolvedIntegration } from "../../integrations/catalog";
+import PromptSuggestions from "./PromptSuggestions";
+import { PromptLibraryItem } from "./promptLibrary";
+import RayaLogo from "../icons/RayaLogo";
+import { AutomationDefinition } from "../../automations/catalog";
+import AutomationHighlights from "./AutomationHighlights";
+import { PlatformLogo } from "../icons/ServiceLogos";
 
 interface ChatInterfaceProps {
+	sessionId: string | null;
 	messages: Message[];
 	isLoading: boolean;
 	streamingSections: StreamedSection[];
 	planStates: Map<string, PlanTask[]>;
-	onSendMessage: (message: string, context?: { channel?: Channel; brands: Brand[] }) => void;
+	onSendMessage: (message: string) => void;
+	onOpenIntegrations: () => void;
+	connectedIntegrations: ResolvedIntegration[];
+	channels: Channel[];
+	activeChannelId: string | null;
+	showComposer?: boolean;
+	headerContent?: React.ReactNode;
+	prefilledInput?: string | null;
+	homeAutomations?: AutomationDefinition[];
+	onOpenAutomationRun?: (automationId: string, options?: { runId?: string; prefilledInput?: string }) => void;
+	onExploreAutomations?: () => void;
 }
 
-// Question categories with detailed prompts
-const SUGGESTED_QUESTIONS: Record<string, { title: string; icon: LucideIcon; questions: { title: string; summary: string; question: string }[] }> = {
-	adGeneration: {
-		title: "Ad Generation",
-		icon: Wand2,
-		questions: [
-			{
-				title: "Top Spenders Remix",
-				summary: "New concepts from best spenders",
-				question: "Generate more ad variations based on my top 3 spending ads.",
-			},
-			{
-				title: "Best Performers",
-				summary: "Iterate on winning creatives",
-				question: "Take my top 3 ads by ROAS and generate new ad variations that build on their success.",
-			},
-			{
-				title: "Video Scripts",
-				summary: "New scripts from top videos",
-				question: "Analyze my best performing video ads and generate new video script concepts with fresh hooks and angles.",
-			},
-			{
-				title: "Competitor Inspired",
-				summary: "Generate ads from competitor insights",
-				question: "Analyze top competitor ads, then generate new ad variations for my brand inspired by their best strategies.",
-			},
-		],
-	},
-	ownPerformance: {
-		title: "Own Performance",
-		icon: BarChart3,
-		questions: [
-			{
-				title: "Top Performers",
-				summary: "See your best ads by ROAS",
-				question: "Show me my top performing ads sorted by ROAS. Include key metrics like spend, CTR, and impressions.",
-			},
-			{
-				title: "Video vs Image",
-				summary: "Compare ad format performance",
-				question: "Compare my video ads vs image ads performance. Which format drives better ROAS and engagement?",
-			},
-			{
-				title: "Winners vs Losers",
-				summary: "What separates best from worst",
-				question: "Compare my top 3 and worst 3 performing ads. Analyze what makes the winners successful and losers underperform.",
-			},
-			{
-				title: "Winning Formula",
-				summary: "Find patterns in top ads",
-				question: "Analyze my top spend ads vs top ROAS ads, deep dive into their creatives, and formulate a winning creative formula.",
-			},
-		],
-	},
-	creativeAnalysis: {
-		title: "Creative Analysis",
-		icon: Sparkles,
-		questions: [
-			{
-				title: "Best Creative",
-				summary: "Analyze your top ad creative",
-				question: "Analyze the creative of my best performing ad. What visual and copy elements make it work?",
-			},
-			{
-				title: "Success Patterns",
-				summary: "What makes top ads work",
-				question: "Analyze the creative patterns across my top 5 performing ads. What do they have in common?",
-			},
-			{
-				title: "Video Deep Dive",
-				summary: "Break down video ad hooks",
-				question: "Deep dive into my top video ad creatives. Analyze the hooks, messaging, and visual elements that drive engagement.",
-			},
-			{
-				title: "Creative Template",
-				summary: "Build a template from winners",
-				question: "Break down the creative elements of my top 3 performers and create a repeatable creative template I can use.",
-			},
-		],
-	},
-	competitorIntel: {
-		title: "Competitor Intel",
-		icon: Eye,
-		questions: [
-			{
-				title: "Top Competitors",
-				summary: "See trending competitor ads",
-				question: "Show me top competitor ads that are currently active. Analyze their key themes and strategies.",
-			},
-			{
-				title: "Brand Spotlight",
-				summary: "Analyze a specific brand",
-				question: "What campaigns is Adidas currently running? Analyze their creative approach and messaging.",
-			},
-			{
-				title: "Video Strategies",
-				summary: "Learn from competitor videos",
-				question: "Analyze competitor video ad strategies. What hooks and formats are they using that we can learn from?",
-			},
-			{
-				title: "Evergreen Ads",
-				summary: "Find long-running campaigns",
-				question: "Find the longest-running competitor campaigns and analyze why they've been successful over time.",
-			},
-		],
-	},
-	strategicInsights: {
-		title: "Strategic Insights",
-		icon: Compass,
-		questions: [
-			{
-				title: "Quick Compare",
-				summary: "How do I stack up",
-				question: "Give me a quick comparison of how my ads perform vs what competitors are running.",
-			},
-			{
-				title: "Gap Analysis",
-				summary: "What am I missing",
-				question: "Analyze competitor ads and identify creative approaches or formats I'm not currently using.",
-			},
-			{
-				title: "Beat Competition",
-				summary: "Learn from the best",
-				question: "Compare my top ads with Adidas' approach. Identify what they do better and opportunities for me.",
-			},
-			{
-				title: "Growth Strategy",
-				summary: "Full strategic roadmap",
-				question: "Based on my top performers and competitor insights, create a winning creative strategy with specific recommendations.",
-			},
-		],
-	},
+type PlanSection = Extract<StreamedSection, { type: "plan" }>;
+type ReportSection = Extract<StreamedSection, { type: "report" }>;
+
+const getReportDocumentId = (reportId: string) => `report:${reportId}`;
+
+const getImageDocumentId = (itemId: string, index: number) => `image:${itemId}:${index}`;
+
+const getVideoDocumentId = (itemId: string, index: number) => `video:${itemId}:${index}`;
+
+const COMPOSER_OVERLAY_ITEMS: Array<{ id: string; label: string; icon: LucideIcon }> = [
+	{ id: "assets", label: "Assets", icon: ImageIcon },
+	{ id: "ads", label: "Ads", icon: Sparkles },
+	{ id: "reports", label: "Reports", icon: FileText },
+	{ id: "following-brand", label: "Following Brand", icon: Heart },
+];
+
+const getLatestPlanSection = (messages: Message[]): PlanSection | null => {
+	for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+		const sections = messages[messageIndex].sections;
+		if (!sections) {
+			continue;
+		}
+
+		for (let sectionIndex = sections.length - 1; sectionIndex >= 0; sectionIndex -= 1) {
+			const section = sections[sectionIndex];
+			if (section.type === "plan") {
+				return section;
+			}
+		}
+	}
+
+	return null;
 };
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, streamingSections, planStates, onSendMessage }) => {
+const getLatestDocumentCandidates = (messages: Message[], streamingSections: StreamedSection[]) => {
+	const documents: ChatDocument[] = [];
+	const sections: StreamedSection[] = [];
+
+	messages.forEach((message) => {
+		if (message.sections) {
+			sections.push(...message.sections);
+		}
+	});
+	sections.push(...streamingSections);
+
+	sections.forEach((section) => {
+		switch (section.type) {
+			case "report":
+				documents.push({
+					id: getReportDocumentId(section.reportId),
+					kind: "report",
+					title: section.title,
+					reportType: section.reportType,
+					content: section.content,
+					itemName: section.itemName,
+					itemData: section.itemData,
+				});
+				break;
+			case "image_concepts":
+				section.concepts.forEach((concept, index) => {
+					documents.push({
+						id: getImageDocumentId(section.itemId, index),
+						kind: "image-concept",
+						title: concept.concept_name || `Image Concept ${index + 1}`,
+						itemName: section.itemName,
+						index,
+						concept,
+					});
+				});
+				break;
+			case "video_concepts":
+				section.concepts.forEach((concept, index) => {
+					documents.push({
+						id: getVideoDocumentId(section.itemId, index),
+						kind: "video-concept",
+						title: concept.concept_name || `Video Concept ${index + 1}`,
+						itemName: section.itemName,
+						index,
+						concept,
+					});
+				});
+				break;
+			default:
+				break;
+		}
+	});
+
+	const latestReportDocument = [...documents].reverse().find((document): document is Extract<ChatDocument, { kind: "report" }> => document.kind === "report") || null;
+	const latestGenerationDocument =
+		[...documents].reverse().find((document) => {
+			if (document.kind === "video-concept") {
+				return true;
+			}
+
+			if (document.kind === "image-concept") {
+				return Boolean(document.concept.concept_name || document.concept.concept_summary || document.concept.concept_detail || document.concept.imageDataUrl);
+			}
+
+			return false;
+		}) ||
+		[...documents].reverse().find((document) => document.kind === "image-concept" || document.kind === "video-concept") ||
+		null;
+
+	return {
+		documents,
+		latestReportDocument,
+		latestGenerationDocument,
+	};
+};
+
+const ChatInterface: React.FC<ChatInterfaceProps> = ({
+	sessionId,
+	messages,
+	isLoading,
+	streamingSections,
+	planStates,
+	onSendMessage,
+	onOpenIntegrations,
+	connectedIntegrations,
+	channels,
+	activeChannelId,
+	showComposer = true,
+	headerContent,
+	prefilledInput,
+	homeAutomations = [],
+	onOpenAutomationRun,
+	onExploreAutomations,
+}) => {
 	const [input, setInput] = useState("");
-	const messagesEndRef = useRef<HTMLDivElement>(null);
+	const [isProgressCollapsed, setIsProgressCollapsed] = useState(true);
+	const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+	const [isDocumentPanelOpen, setIsDocumentPanelOpen] = useState(false);
+	const [isComposerMenuOpen, setIsComposerMenuOpen] = useState(false);
+	const chatMessagesAreaRef = useRef<HTMLDivElement>(null);
+	const initialScrollSessionRef = useRef<string | null>(null);
+	const composerMenuRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLTextAreaElement>(null);
+
+	const resizeComposer = useCallback(() => {
+		const node = inputRef.current;
+		if (!node) {
+			return;
+		}
+
+		node.style.height = "auto";
+		const nextHeight = Math.min(node.scrollHeight, 220);
+		node.style.height = `${nextHeight}px`;
+		node.style.overflowY = node.scrollHeight > 220 ? "auto" : "hidden";
+	}, []);
 
 	// Callback ref that scrolls to top when empty state mounts
 	const emptyStateRef = useCallback((node: HTMLDivElement | null) => {
@@ -158,88 +190,183 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 		}
 	}, []);
 
-	// Context selection state
-	const [selectedChannels, setSelectedChannels] = useState<Channel[]>([]);
-	const [selectedBrands, setSelectedBrands] = useState<Brand[]>([]);
-	const [showChannelSelector, setShowChannelSelector] = useState(false);
-	const [showBrandSelector, setShowBrandSelector] = useState(false);
+	const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+		const node = chatMessagesAreaRef.current;
+		if (!node) {
+			return;
+		}
 
-	// Cache for channel/brand data
-	const [channelsCache, setChannelsCache] = useState<Channel[]>([]);
-	const [brandsCache, setBrandsCache] = useState<Brand[]>([]);
-
-	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3002" : "";
-
-	// Fetch channels and brands for cache on mount
-	useEffect(() => {
-		const fetchData = async () => {
-			try {
-				const [channelsRes, brandsRes] = await Promise.all([fetch(`${baseUrl}/api/own-analytics`), fetch(`${baseUrl}/api/brands`)]);
-				const channelsData = await channelsRes.json();
-				const brandsData: Brand[] = await brandsRes.json();
-				setChannelsCache(channelsData.channels || []);
-				setBrandsCache(brandsData.filter((b) => b.is_followed));
-			} catch (err) {
-				console.error("Error fetching context data:", err);
-			}
+		const scroll = () => {
+			node.scrollTo({
+				top: node.scrollHeight,
+				behavior,
+			});
 		};
-		fetchData();
-	}, [baseUrl]);
 
-	const scrollToBottom = () => {
-		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	};
+		scroll();
+		window.requestAnimationFrame(scroll);
+	}, []);
 
-	const isEmptyState = messages.length === 0 && !isLoading;
+	const isEmptyState = showComposer && messages.length === 0 && !isLoading;
+	const streamingPhase = useMemo<AssistantStreamingPhase>(() => {
+		const hasContentSections = streamingSections.some((section) => section.type !== "plan");
+		return hasContentSections ? "writing" : "reasoning";
+	}, [streamingSections]);
+	const workspaceConnectedIntegrations = useMemo(
+		() =>
+			connectedIntegrations.filter(
+				(integration) => !QUICK_ADD_INTEGRATION_IDS.includes(integration.id as (typeof QUICK_ADD_INTEGRATION_IDS)[number])
+			),
+		[connectedIntegrations]
+	);
+	const connectedChannels = useMemo(() => channels.filter((channel) => channel.is_connected), [channels]);
+	const activeChannel = useMemo(
+		() => connectedChannels.find((channel) => channel.id === activeChannelId) || connectedChannels[0] || null,
+		[activeChannelId, connectedChannels]
+	);
 
 	useEffect(() => {
 		if (!isEmptyState) {
-			scrollToBottom();
+			scrollToBottom(isLoading ? "auto" : "smooth");
 		}
-	}, [messages, streamingSections, isEmptyState]);
+	}, [messages, streamingSections, isEmptyState, isLoading, scrollToBottom]);
 
-	// Get effective channel - use selected or first from cache as default
-	const getEffectiveChannel = () => {
-		return selectedChannels[0] || channelsCache[0] || undefined;
-	};
+	useLayoutEffect(() => {
+		if (!sessionId || isEmptyState || initialScrollSessionRef.current === sessionId) {
+			return;
+		}
+
+		const frameId = window.requestAnimationFrame(() => {
+			scrollToBottom("auto");
+			initialScrollSessionRef.current = sessionId;
+		});
+
+		return () => window.cancelAnimationFrame(frameId);
+	}, [sessionId, isEmptyState, messages.length, streamingSections.length, scrollToBottom]);
+
+	const activePlanSection = streamingSections.find((section): section is PlanSection => section.type === "plan");
+	const activePlanTasks = activePlanSection ? planStates.get(activePlanSection.planId) || activePlanSection.tasks : [];
+	const latestCompletedPlanSection = getLatestPlanSection(messages);
+	const displayedPlanSection = activePlanSection || (!isLoading ? latestCompletedPlanSection : null);
+	const displayedPlanTasks = activePlanSection ? activePlanTasks : displayedPlanSection?.tasks || [];
+	const displayedPlanId = displayedPlanSection?.planId;
+	const { documents, latestReportDocument, latestGenerationDocument } = useMemo(() => getLatestDocumentCandidates(messages, streamingSections), [messages, streamingSections]);
+	const latestDocument = latestGenerationDocument || latestReportDocument;
+	const selectedDocument = (selectedDocumentId ? documents.find((document) => document.id === selectedDocumentId) : null) || null;
+
+	useEffect(() => {
+		if (displayedPlanId) {
+			setIsProgressCollapsed(true);
+		}
+	}, [displayedPlanId]);
+
+	useEffect(() => {
+		if (!sessionId) {
+			setSelectedDocumentId(null);
+			setIsDocumentPanelOpen(false);
+			return;
+		}
+
+		if (latestDocument) {
+			setSelectedDocumentId(latestDocument.id);
+			setIsDocumentPanelOpen(true);
+			return;
+		}
+
+		setSelectedDocumentId(null);
+		setIsDocumentPanelOpen(false);
+	}, [sessionId, latestDocument]);
+
+	useEffect(() => {
+		if (isLoading && latestGenerationDocument) {
+			setSelectedDocumentId(latestGenerationDocument.id);
+			setIsDocumentPanelOpen(true);
+		}
+	}, [isLoading, latestGenerationDocument]);
+
+	useEffect(() => {
+		if (!selectedDocumentId) {
+			return;
+		}
+
+		if (!selectedDocument && latestDocument) {
+			setSelectedDocumentId(latestDocument.id);
+			setIsDocumentPanelOpen(true);
+		}
+	}, [selectedDocumentId, selectedDocument, latestDocument]);
+
+	useEffect(() => {
+		if (!prefilledInput) {
+			return;
+		}
+
+		setInput(prefilledInput);
+		window.requestAnimationFrame(() => {
+			resizeComposer();
+			inputRef.current?.focus();
+		});
+	}, [prefilledInput, resizeComposer, sessionId]);
+
+	useLayoutEffect(() => {
+		resizeComposer();
+	}, [input, resizeComposer]);
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (composerMenuRef.current && !composerMenuRef.current.contains(event.target as Node)) {
+				setIsComposerMenuOpen(false);
+			}
+		};
+
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!input.trim() || isLoading) return;
-
-		// Pass context with message - use default channel if none selected
-		const context = {
-			channel: getEffectiveChannel(),
-			brands: selectedBrands,
-		};
-		onSendMessage(input, context);
+		onSendMessage(input);
 		setInput("");
 	};
 
-	const handleSuggestedClick = (text: string) => {
-		const context = {
-			channel: getEffectiveChannel(),
-			brands: selectedBrands,
-		};
-		onSendMessage(text, context);
+	const handleComposerKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (event.key === "Enter" && !event.shiftKey) {
+			event.preventDefault();
+			if (!input.trim() || isLoading) {
+				return;
+			}
+
+			onSendMessage(input);
+			setInput("");
+		}
 	};
 
-	const handleChannelSelect = (ids: string[]) => {
-		const channels = channelsCache.filter((c) => ids.includes(c.id));
-		setSelectedChannels(channels);
+	const handlePromptSelect = (item: PromptLibraryItem) => {
+		setInput(item.prompt);
+		window.requestAnimationFrame(() => {
+			resizeComposer();
+			inputRef.current?.focus();
+		});
 	};
 
-	const handleBrandSelect = (ids: string[]) => {
-		const brands = brandsCache.filter((b) => ids.includes(b.id));
-		setSelectedBrands(brands);
+	const openReportDocument = (section: ReportSection) => {
+		setSelectedDocumentId(getReportDocumentId(section.reportId));
+		setIsDocumentPanelOpen(true);
 	};
 
-	const removeChannel = (id: string) => {
-		setSelectedChannels((prev) => prev.filter((c) => c.id !== id));
+	const openImageConceptDocument = (itemId: string, _itemName: string, _concept: ImageConcept, index: number) => {
+		setSelectedDocumentId(getImageDocumentId(itemId, index));
+		setIsDocumentPanelOpen(true);
 	};
 
-	const removeBrand = (id: string) => {
-		setSelectedBrands((prev) => prev.filter((b) => b.id !== id));
+	const openVideoConceptDocument = (itemId: string, _itemName: string, _concept: VideoConcept, index: number) => {
+		setSelectedDocumentId(getVideoDocumentId(itemId, index));
+		setIsDocumentPanelOpen(true);
+	};
+
+	const closeDocumentPanel = () => {
+		setSelectedDocumentId(null);
+		setIsDocumentPanelOpen(false);
 	};
 
 	const renderMessage = (msg: Message, index: number) => {
@@ -255,7 +382,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 		if (msg.sections && msg.sections.length > 0) {
 			return (
 				<div key={index} className="assistant-response">
-					<StreamingMessage sections={msg.sections} planStates={new Map()} hidePlan={false} />
+					<StreamingMessage
+						sections={msg.sections}
+						planStates={new Map()}
+						activeDocumentId={isDocumentPanelOpen ? selectedDocumentId : null}
+						onOpenReport={openReportDocument}
+						onOpenImageConcept={openImageConceptDocument}
+						onOpenVideoConcept={openVideoConceptDocument}
+					/>
 				</div>
 			);
 		}
@@ -271,101 +405,156 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, stre
 	// Input area component (reusable)
 	const renderInputArea = (isInline: boolean) => (
 		<div className={`chat-input-area ${isInline ? "inline" : "floating"}`}>
-			{isInline && (
-				<>
-					<div className="input-actions-bar">
-						{selectedChannels.map((channel) => (
-							<span key={channel.id} className="context-pill channel">
-								{channel.name}
-								<button onClick={() => removeChannel(channel.id)}>
-									<X size={12} />
-								</button>
-							</span>
-						))}
-						{selectedChannels.length === 0 && (
-							<button className="tag-btn" onClick={() => setShowChannelSelector(true)}>
-								+ Channel
-							</button>
-						)}
-						{selectedBrands.map((brand) => (
-							<span key={brand.id} className="context-pill brand">
-								{brand.name}
-								<button onClick={() => removeBrand(brand.id)}>
-									<X size={12} />
-								</button>
-							</span>
-						))}
-						<button className="tag-btn" onClick={() => setShowBrandSelector(true)}>
-							+ Following Brand
-						</button>
+			<div className="chat-input-shell">
+				{!isInline && displayedPlanSection && displayedPlanTasks.length > 0 && (
+					<div className="input-progress-panel">
+						<PlanTimeline
+							planId={displayedPlanSection.planId}
+							agentName={displayedPlanSection.agentName}
+							title={displayedPlanSection.title}
+							tasks={displayedPlanTasks}
+							collapsed={isProgressCollapsed}
+							onToggleCollapsed={() => setIsProgressCollapsed((prev) => !prev)}
+						/>
 					</div>
-				</>
-			)}
-			<form onSubmit={handleSubmit} className="input-wrapper">
-				<input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask me to do anything..." disabled={isLoading} />
-				<button type="submit" disabled={isLoading || !input.trim()} className="send-btn">
-					<ArrowUp size={18} color="white" />
-				</button>
-			</form>
+				)}
+				<form onSubmit={handleSubmit} className="input-wrapper">
+					<textarea
+						ref={inputRef}
+						rows={1}
+						value={input}
+						onChange={(e) => setInput(e.target.value)}
+						onKeyDown={handleComposerKeyDown}
+						placeholder="Ask me to do anything..."
+						disabled={isLoading}
+					/>
+					<div className="input-toolbar">
+						<div className="input-toolbar-left">
+							<div className="composer-overlay-menu" ref={composerMenuRef}>
+								<button
+									type="button"
+									className={`composer-plus-btn ${isComposerMenuOpen ? "is-open" : ""}`}
+									aria-label="Open composer menu"
+									onClick={() => setIsComposerMenuOpen((prev) => !prev)}
+								>
+									<Plus size={18} />
+								</button>
+								{isComposerMenuOpen && (
+									<div className="composer-overlay-dropdown">
+										{COMPOSER_OVERLAY_ITEMS.map((item) => {
+											const Icon = item.icon;
+											return (
+												<button
+													key={item.id}
+													type="button"
+													className="composer-overlay-item"
+													onClick={() => setIsComposerMenuOpen(false)}
+												>
+													<span className="composer-overlay-item-icon">
+														<Icon size={16} />
+													</span>
+													<span>{item.label}</span>
+												</button>
+											);
+										})}
+									</div>
+								)}
+							</div>
+						</div>
+						<div className="input-toolbar-right">
+							<div className={`composer-channel-pill ${activeChannel ? "" : "is-empty"}`}>
+								{activeChannel ? (
+									<>
+										<span className="composer-channel-pill-icon">
+											<PlatformLogo platform={activeChannel.platform} size={16} />
+										</span>
+										<span className="composer-channel-pill-label">{activeChannel.name}</span>
+									</>
+								) : (
+									<span className="composer-channel-pill-label">No channel selected</span>
+								)}
+							</div>
+							<button type="submit" disabled={isLoading || !input.trim()} className="send-btn">
+								<ArrowUp size={18} color="white" />
+							</button>
+						</div>
+					</div>
+				</form>
+			</div>
 		</div>
 	);
 
 	return (
-		<div className="chat-interface">
-			{isEmptyState ? (
-				<div className="empty-state-container" ref={emptyStateRef}>
-					<h2 className="center-brand">Atria</h2>
-					{/* Inline input for empty state */}
-					{renderInputArea(true)}
-					<div className="suggested-questions-container">
-						{Object.values(SUGGESTED_QUESTIONS).map((category) => {
-							const IconComponent = category.icon;
-							return (
-								<div key={category.title} className="question-category">
-									<h3 className="category-title">
-										<IconComponent size={20} className="category-icon" />
-										{category.title}
-									</h3>
-									<div className="cards-grid">
-										{category.questions.map((q) => (
-											<button key={q.title} className="suggested-card" onClick={() => handleSuggestedClick(q.question)}>
-												<span className="card-title">{q.title}</span>
-												<span className="card-subtitle">{q.summary}</span>
-											</button>
-										))}
-									</div>
-								</div>
-							);
-						})}
+		<div className={`chat-interface ${isDocumentPanelOpen && selectedDocument ? "has-document-panel" : ""}`}>
+			<div className="chat-primary-column">
+				{headerContent && !isEmptyState && <div className="chat-interface-header">{headerContent}</div>}
+				{isEmptyState ? (
+					<div className="empty-state-container" ref={emptyStateRef}>
+						<div className="empty-state-header">
+							<div className="empty-state-title-row">
+								<RayaLogo size={36} variant="color" className="empty-state-brand-icon" />
+								<h2 className="center-brand">Ask Raya</h2>
+							</div>
+							<p className="center-brand-subtitle">Trained on insights from 5.4B in ad spend</p>
+						</div>
+						<button type="button" className="integrations-launch-btn" onClick={onOpenIntegrations}>
+							<span>Integrations</span>
+							{workspaceConnectedIntegrations.length > 0 && (
+								<span className="integrations-launch-logos">
+									{workspaceConnectedIntegrations.slice(0, 4).map((integration) => (
+										<span key={integration.id} className="integrations-launch-logo">
+											{integration.renderLogo(24)}
+										</span>
+									))}
+									{workspaceConnectedIntegrations.length > 4 && (
+										<span className="integrations-launch-more">+{workspaceConnectedIntegrations.length - 4}</span>
+									)}
+								</span>
+							)}
+						</button>
+						{/* Inline input for empty state */}
+						{renderInputArea(true)}
+						<PromptSuggestions onPromptSelect={handlePromptSelect} />
+						{homeAutomations.length > 0 && onOpenAutomationRun && (
+							<AutomationHighlights
+								automations={homeAutomations}
+								onOpenAutomationRun={onOpenAutomationRun}
+								onExploreAutomations={onExploreAutomations}
+							/>
+						)}
 					</div>
-				</div>
-			) : (
-				<div className="chat-messages-area">
-					{/* Render completed messages */}
-					{messages.map((msg, index) => renderMessage(msg, index))}
+				) : (
+					<div className="chat-messages-area" ref={chatMessagesAreaRef}>
+						<div className="chat-thread-shell">
+							{/* Render completed messages */}
+							{messages.map((msg, index) => renderMessage(msg, index))}
 
-					{/* Render streaming sections during loading */}
-					{isLoading && streamingSections.length > 0 && (
-						<div className="assistant-response streaming">
-							<StreamingMessage sections={streamingSections} planStates={planStates} hidePlan={false} />
+							{/* Render streaming sections during loading */}
+							{isLoading && streamingSections.length > 0 && (
+								<div className="assistant-response streaming">
+									<StreamingMessage
+										sections={streamingSections}
+										planStates={planStates}
+										activeDocumentId={isDocumentPanelOpen ? selectedDocumentId : null}
+										onOpenReport={openReportDocument}
+										onOpenImageConcept={openImageConceptDocument}
+										onOpenVideoConcept={openVideoConceptDocument}
+									/>
+								</div>
+							)}
+
+							{isLoading && (
+								<div className="loading-indicator">
+									<AssistantStreamingIndicator phase={streamingPhase} />
+								</div>
+							)}
 						</div>
-					)}
-
-					{/* Loading indicator when no sections yet */}
-					{isLoading && streamingSections.length === 0 && (
-						<div className="loading-indicator">
-							<span className="loading-text">Thinking...</span>
-						</div>
-					)}
-
-					<div ref={messagesEndRef} />
-					{/* Floating input for active chat */}
-					{renderInputArea(false)}
-				</div>
-			)}
-			{/* Context Selector Popups */}
-			{showChannelSelector && <ContextSelector type="channel" selectedIds={selectedChannels.map((c) => c.id)} onSelect={handleChannelSelect} onClose={() => setShowChannelSelector(false)} />}
-			{showBrandSelector && <ContextSelector type="brand" selectedIds={selectedBrands.map((b) => b.id)} onSelect={handleBrandSelect} onClose={() => setShowBrandSelector(false)} />}
+						{/* Floating input for active chat */}
+						{showComposer && renderInputArea(false)}
+					</div>
+				)}
+			</div>
+			{isDocumentPanelOpen && selectedDocument && <DocumentPanel document={selectedDocument} onClose={closeDocumentPanel} />}
 		</div>
 	);
 };

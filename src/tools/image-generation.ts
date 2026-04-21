@@ -75,7 +75,7 @@ class ImageGenerationToolWrapper {
         report: CreativeReport,
         context: GlobalContext,
         stream: StreamEmitter,
-        numConcepts: number = 8
+        numConcepts: number = 4
     ): Promise<ImageGenerationResult> {
         logger.debug('ImageGenerationTool', `Generating ${numConcepts} concepts for ${item.name}`);
 

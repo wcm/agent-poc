@@ -40,8 +40,9 @@ Return a JSON object:
 1. If "top N" is requested, select the first N items (data is pre-sorted)
 2. If "worst/bottom N" is requested, select from the end (or first N if sorted ascending)
 3. Default to selecting 3-5 items unless specified otherwise
-4. Match the user's intent from the task description
-5. Return actual IDs from the data (don't make them up)
+4. If the task is about generating ad variations, ad concepts, or new creatives and no count is specified, default to selecting 1 item
+5. Match the user's intent from the task description
+6. Return actual IDs from the data (don't make them up)
 
 ## EXAMPLES
 
@@ -281,4 +282,3 @@ Select the appropriate items based on the task.
 }
 
 export const focusItemsTool = new FocusItemsToolWrapper();
-

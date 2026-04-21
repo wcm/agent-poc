@@ -22,6 +22,36 @@ export interface BrandInfo {
     is_followed: boolean;
 }
 
+export type IntegrationAvailability = 'available' | 'coming_soon';
+export type IntegrationStatus = 'connected' | 'available' | 'coming_soon';
+
+export interface FrontendIntegrationInfo {
+    id: string;
+    name: string;
+    status: 'connected';
+}
+
+export interface IntegrationInfo {
+    id: string;
+    name: string;
+    availability: IntegrationAvailability;
+    status: IntegrationStatus;
+    capabilities: string[];
+}
+
+export interface IntegrationResultRecord {
+    id: string;
+    integrationId: string;
+    integrationName: string;
+    title: string;
+    status: IntegrationStatus | 'unknown';
+    mode: 'data' | 'instruction';
+    query: string;
+    content: string;
+    shouldContinue: boolean;
+    timestamp: number;
+}
+
 /**
  * SSE Event Types - Sent from server to frontend
  */
@@ -80,6 +110,18 @@ export interface ReportEvent {
             cost_per_lead?: number;
         };
     };
+}
+
+// Integration result event - structured integration response card
+export interface IntegrationResultEvent {
+    type: 'integration_result';
+    resultId: string;
+    integrationId: string;
+    integrationName: string;
+    title: string;
+    status: IntegrationStatus | 'unknown';
+    mode: 'data' | 'instruction';
+    content: string;
 }
 
 // Focused items event - ad/creative cards
@@ -163,6 +205,7 @@ export type SSEEvent =
     | PlanEvent 
     | PlanStatusEvent 
     | ReportEvent 
+    | IntegrationResultEvent
     | FocusedItemsEvent 
     | ContextUpdateEvent 
     | DoneEvent

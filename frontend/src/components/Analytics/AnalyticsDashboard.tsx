@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { X, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown, Play, Filter, Layers } from "lucide-react";
+import { AnalyticsDashboardView, Channel } from "../../types";
 
 interface AdMetrics {
 	spend: number;
@@ -34,12 +35,6 @@ interface AnalyticsAd {
 	group_value?: string;
 }
 
-interface Channel {
-	id: string;
-	name: string;
-	platform: string;
-}
-
 interface AnalyticsData {
 	channels: Channel[];
 	ads: AnalyticsAd[];
@@ -47,7 +42,6 @@ interface AnalyticsData {
 }
 
 type GroupByOption = "ad_name" | "creative_name" | "headline" | "ad_copy";
-
 const GROUP_BY_OPTIONS: { value: GroupByOption; label: string }[] = [
 	{ value: "ad_name", label: "Ad Name" },
 	{ value: "creative_name", label: "Creative Name" },
@@ -73,6 +67,12 @@ const METRIC_CONFIG: Record<string, { label: string; format: (v: number) => stri
 const MAX_CHART_ADS = 8;
 const MAX_CHART_METRICS = 5;
 
+const DASHBOARD_OPTIONS: Array<{ id: AnalyticsDashboardView; label: string }> = [
+	{ id: "top_spend", label: "Top Spend" },
+	{ id: "top_videos", label: "Top Videos" },
+	{ id: "top_images", label: "Top Images" },
+];
+
 // Fixed bar widths for each metric count
 const BAR_WIDTHS: Record<number, number> = {
 	1: 40,
@@ -83,16 +83,18 @@ const BAR_WIDTHS: Record<number, number> = {
 };
 
 interface AnalyticsDashboardProps {
+	channels: Channel[];
 	channelId?: string;
+	onChannelChange: (channelId: string) => void;
+	dashboardView: AnalyticsDashboardView;
 }
 
-const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) => {
+const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channels, channelId, onChannelChange, dashboardView }) => {
 	const [data, setData] = useState<AnalyticsData | null>(null);
 	const [loading, setLoading] = useState(true);
 
 	// Filter & GroupBy state
 	const [groupBy, setGroupBy] = useState<GroupByOption>("ad_name");
-	const [filterDisplayFormat, setFilterDisplayFormat] = useState<string>("all");
 	const [filterStatus, setFilterStatus] = useState<string>("all");
 	const [filterStartDateFrom, setFilterStartDateFrom] = useState<string>("");
 	const [filterStartDateTo, setFilterStartDateTo] = useState<string>("");
@@ -117,6 +119,14 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 	const groupByDropdownRef = useRef<HTMLDivElement>(null);
 
 	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3002" : "";
+	const connectedChannels = useMemo(() => channels.filter((channel) => channel.is_connected), [channels]);
+	const dashboardDisplayFormat = dashboardView === "top_videos" ? "video" : dashboardView === "top_images" ? "image" : "all";
+
+	useEffect(() => {
+		if (!channelId && connectedChannels.length > 0) {
+			onChannelChange(connectedChannels[0].id);
+		}
+	}, [channelId, connectedChannels, onChannelChange]);
 
 	// Build URL with query params
 	const buildApiUrl = useCallback(() => {
@@ -125,8 +135,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 		if (channelId) {
 			params.set("channel", channelId);
 		}
-		if (filterDisplayFormat !== "all") {
-			params.set("display_format", filterDisplayFormat);
+		if (dashboardDisplayFormat !== "all") {
+			params.set("display_format", dashboardDisplayFormat);
 		}
 		if (filterStatus !== "all") {
 			params.set("status", filterStatus);
@@ -138,7 +148,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 			params.set("start_date_to", filterStartDateTo);
 		}
 		return `${baseUrl}/api/own-analytics?${params.toString()}`;
-	}, [baseUrl, channelId, groupBy, filterDisplayFormat, filterStatus, filterStartDateFrom, filterStartDateTo]);
+	}, [baseUrl, channelId, groupBy, dashboardDisplayFormat, filterStatus, filterStartDateFrom, filterStartDateTo]);
 
 	// Fetch data when filters change
 	useEffect(() => {
@@ -293,18 +303,36 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 	if (loading) return <div className="analytics-loading">Loading analytics...</div>;
 	if (!data) return <div className="analytics-loading">Failed to load analytics data</div>;
 
-	const activeChannel = data.channels?.find((c) => c.id === channelId) || data.channels?.[0];
-	const channelName = activeChannel?.name || "Analytics Dashboard";
-
-	const activeFilterCount = (filterDisplayFormat !== "all" ? 1 : 0) + (filterStatus !== "all" ? 1 : 0) + (filterStartDateFrom ? 1 : 0) + (filterStartDateTo ? 1 : 0);
-	const hasActiveFilters = filterDisplayFormat !== "all" || filterStatus !== "all" || filterStartDateFrom || filterStartDateTo;
+	const activeChannel = connectedChannels.find((channel) => channel.id === channelId) || connectedChannels[0] || null;
+	const activeFilterCount = (filterStatus !== "all" ? 1 : 0) + (filterStartDateFrom ? 1 : 0) + (filterStartDateTo ? 1 : 0);
+	const hasActiveFilters = filterStatus !== "all" || filterStartDateFrom || filterStartDateTo;
 	const showThumbnails = groupBy === "ad_name" || groupBy === "creative_name";
+
+	if (connectedChannels.length === 0) {
+		return (
+			<div className="analytics-dashboard">
+				<div className="analytics-header">
+					<div className="analytics-header-copy">
+						<h1>Analytics</h1>
+						<p>Use the plus button in the sidebar to connect a channel and unlock analytics dashboards.</p>
+					</div>
+				</div>
+
+				<div className="analytics-empty-state-card">
+					<h2>No connected channels yet</h2>
+					<p>Connect a channel to start exploring Top Spend, Top Videos, and Top Images dashboards.</p>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="analytics-dashboard">
 			<div className="analytics-header">
-				<h1>{channelName}</h1>
-				<p>Unlock deeper insights into your ad performance. Discover what drives results and optimize your creative strategy.</p>
+				<div className="analytics-header-copy">
+					<h1>{DASHBOARD_OPTIONS.find((option) => option.id === dashboardView)?.label ?? "Top Spend"}</h1>
+					<p>{activeChannel?.name ?? "Analytics"}</p>
+				</div>
 			</div>
 
 			{/* Filter & GroupBy Controls */}
@@ -346,21 +374,6 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 					{filterDropdownOpen && (
 						<div className="filter-dropdown">
 							<div className="filter-section">
-								<div className="filter-section-title">Display Format</div>
-								<label className="filter-option">
-									<input type="radio" name="displayFormat" checked={filterDisplayFormat === "all"} onChange={() => setFilterDisplayFormat("all")} />
-									All
-								</label>
-								<label className="filter-option">
-									<input type="radio" name="displayFormat" checked={filterDisplayFormat === "video"} onChange={() => setFilterDisplayFormat("video")} />
-									Video
-								</label>
-								<label className="filter-option">
-									<input type="radio" name="displayFormat" checked={filterDisplayFormat === "image"} onChange={() => setFilterDisplayFormat("image")} />
-									Image
-								</label>
-							</div>
-							<div className="filter-section">
 								<div className="filter-section-title">Status</div>
 								<label className="filter-option">
 									<input type="radio" name="status" checked={filterStatus === "all"} onChange={() => setFilterStatus("all")} />
@@ -390,7 +403,6 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 								<button
 									className="clear-filters-btn"
 									onClick={() => {
-										setFilterDisplayFormat("all");
 										setFilterStatus("all");
 										setFilterStartDateFrom("");
 										setFilterStartDateTo("");
@@ -616,6 +628,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channelId }) =>
 					</tbody>
 				</table>
 			</div>
+
 		</div>
 	);
 };
