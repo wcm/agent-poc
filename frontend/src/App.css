@@ -4277,7 +4277,7 @@ body {
 }
 
 .integration-card.is-coming-soon {
-  background: #e5e5e5;
+  background: #eaeaea;
 }
 
 .integration-card-top {
@@ -4441,9 +4441,8 @@ body {
 }
 
 .integration-card-action.request {
-  background: #ffffff;
   color: #111827;
-  border-color: #d6d3d1;
+  border-color: #ccc;
 }
 
 .integration-card-action.request:hover {
