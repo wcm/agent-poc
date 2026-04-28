@@ -14,7 +14,7 @@ import { getConnectedIntegrationInputs, resolveIntegrations } from './integratio
 import { 
     SSEEvent, 
     StreamEmitter, 
-    ChannelInfo,
+    IntegrationInfo,
     PlanTask
 } from './types';
 import { guardrailTool } from './tools/guardrail';
@@ -46,7 +46,7 @@ export class Agent extends EventEmitter {
 
     constructor() {
         super();
-        // Initialize with empty context (channel will be set on first request)
+        // Initialize with empty context (integration will be set on first request)
         this.context = createEmptyContext({
             id: '',
             name: '',
@@ -67,7 +67,7 @@ export class Agent extends EventEmitter {
      * Clear context and reset
      */
     clearHistory(): void {
-        this.context = createEmptyContext(this.context.channel);
+        this.context = createEmptyContext(this.context.integration);
         this.initialized = false;
         logger.debug('Agent', 'History cleared');
     }
@@ -80,21 +80,22 @@ export class Agent extends EventEmitter {
     }
 
     /**
-     * Fetch channel info from analytics data
+     * Fetch integration info from analytics data
      */
-    private getChannelInfo(channelId: string): ChannelInfo {
+    private getIntegrationInfo(integrationId: string): IntegrationInfo {
         try {
             const dataPath = path.join(__dirname, 'data', 'own-analytics.json');
             const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-            const channel = data.channels?.find((c: ChannelInfo) => c.id === channelId);
-            if (channel) return channel;
+            const integrations = data.integrations;
+            const integration = integrations?.find((c: IntegrationInfo) => c.id === integrationId);
+            if (integration) return integration;
         } catch (e) {
-            logger.log('ERROR', { component: 'Agent', action: 'INIT' }, 'Error reading channel info');
+            logger.log('ERROR', { component: 'Agent', action: 'INIT' }, 'Error reading integration info');
         }
         // Fallback
         return {
-            id: channelId,
-            name: channelId,
+            id: integrationId,
+            name: integrationId,
             platform: 'unknown',
             account_id: '',
             is_connected: true
@@ -104,32 +105,32 @@ export class Agent extends EventEmitter {
     /**
      * Main request handler
      */
-    async handleRequest(userInput: string, channelId: string, userContext?: UserContext): Promise<void> {
+    async handleRequest(userInput: string, integrationId: string, userContext?: UserContext): Promise<void> {
         logger.separator('NEW REQUEST');
-        logger.agentStart('Agent', { userInput, channelId, userContext });
+        logger.agentStart('Agent', { userInput, integrationId, userContext });
 
         try {
-            // Determine the active channel - user selection takes priority
-            let activeChannel: ChannelInfo;
-            if (userContext?.channel) {
-                activeChannel = userContext.channel;
-                logger.debug('Agent', 'Using user-selected channel', { channelId: activeChannel.id });
+            // Determine the active integration - user selection takes priority
+            let activeIntegration: IntegrationInfo;
+            if (userContext?.integration) {
+                activeIntegration = userContext.integration;
+                logger.debug('Agent', 'Using user-selected integration', { integrationId: activeIntegration.id });
             } else {
-                activeChannel = this.getChannelInfo(channelId);
+                activeIntegration = this.getIntegrationInfo(integrationId);
             }
 
             const connectedIntegrationInputs = userContext?.integrations || getConnectedIntegrationInputs(this.context.integrations);
 
             // Initialize/update context
-            if (!this.initialized || this.context.channel.id !== activeChannel.id) {
-                this.context = createEmptyContext(activeChannel, userInput, {
+            if (!this.initialized || this.context.integration.id !== activeIntegration.id) {
+                this.context = createEmptyContext(activeIntegration, userInput, {
                     ...userContext,
                     integrations: connectedIntegrationInputs
                 });
                 this.initialized = true;
             } else {
                 this.context.userInput = userInput;
-                this.context.channel = activeChannel;
+                this.context.integration = activeIntegration;
                 this.context.integrations = resolveIntegrations(connectedIntegrationInputs);
                 // Update followed brands if provided
                 if (userContext?.brands) {

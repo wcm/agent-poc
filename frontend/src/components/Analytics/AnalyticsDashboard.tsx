@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { X, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown, Play, Filter, Layers } from "lucide-react";
-import { AnalyticsDashboardView, Channel } from "../../types";
+import { AnalyticsDashboardView, Integration } from "../../types";
 
 interface AdMetrics {
 	spend: number;
@@ -19,7 +19,7 @@ interface AdMetrics {
 
 interface AnalyticsAd {
 	id: string;
-	channel_id: string;
+	integration_id?: string;
 	ad_name: string;
 	creative_name?: string;
 	headline: string;
@@ -36,7 +36,7 @@ interface AnalyticsAd {
 }
 
 interface AnalyticsData {
-	channels: Channel[];
+	integrations: Integration[];
 	ads: AnalyticsAd[];
 	groupBy?: string;
 }
@@ -83,13 +83,13 @@ const BAR_WIDTHS: Record<number, number> = {
 };
 
 interface AnalyticsDashboardProps {
-	channels: Channel[];
-	channelId?: string;
-	onChannelChange: (channelId: string) => void;
+	integrations: Integration[];
+	integrationId?: string;
+	onIntegrationChange: (integrationId: string) => void;
 	dashboardView: AnalyticsDashboardView;
 }
 
-const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channels, channelId, onChannelChange, dashboardView }) => {
+const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ integrations, integrationId, onIntegrationChange, dashboardView }) => {
 	const [data, setData] = useState<AnalyticsData | null>(null);
 	const [loading, setLoading] = useState(true);
 
@@ -119,21 +119,21 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channels, chann
 	const groupByDropdownRef = useRef<HTMLDivElement>(null);
 
 	const baseUrl = window.location.hostname === "localhost" ? "http://localhost:3002" : "";
-	const connectedChannels = useMemo(() => channels.filter((channel) => channel.is_connected), [channels]);
+	const connectedIntegrations = useMemo(() => integrations.filter((integration) => integration.is_connected), [integrations]);
 	const dashboardDisplayFormat = dashboardView === "top_videos" ? "video" : dashboardView === "top_images" ? "image" : "all";
 
 	useEffect(() => {
-		if (!channelId && connectedChannels.length > 0) {
-			onChannelChange(connectedChannels[0].id);
+		if (!integrationId && connectedIntegrations.length > 0) {
+			onIntegrationChange(connectedIntegrations[0].id);
 		}
-	}, [channelId, connectedChannels, onChannelChange]);
+	}, [integrationId, connectedIntegrations, onIntegrationChange]);
 
 	// Build URL with query params
 	const buildApiUrl = useCallback(() => {
 		const params = new URLSearchParams();
 		params.set("groupBy", groupBy);
-		if (channelId) {
-			params.set("channel", channelId);
+		if (integrationId) {
+			params.set("integration", integrationId);
 		}
 		if (dashboardDisplayFormat !== "all") {
 			params.set("display_format", dashboardDisplayFormat);
@@ -148,7 +148,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channels, chann
 			params.set("start_date_to", filterStartDateTo);
 		}
 		return `${baseUrl}/api/own-analytics?${params.toString()}`;
-	}, [baseUrl, channelId, groupBy, dashboardDisplayFormat, filterStatus, filterStartDateFrom, filterStartDateTo]);
+	}, [baseUrl, integrationId, groupBy, dashboardDisplayFormat, filterStatus, filterStartDateFrom, filterStartDateTo]);
 
 	// Fetch data when filters change
 	useEffect(() => {
@@ -303,24 +303,24 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channels, chann
 	if (loading) return <div className="analytics-loading">Loading analytics...</div>;
 	if (!data) return <div className="analytics-loading">Failed to load analytics data</div>;
 
-	const activeChannel = connectedChannels.find((channel) => channel.id === channelId) || connectedChannels[0] || null;
+	const activeIntegration = connectedIntegrations.find((integration) => integration.id === integrationId) || connectedIntegrations[0] || null;
 	const activeFilterCount = (filterStatus !== "all" ? 1 : 0) + (filterStartDateFrom ? 1 : 0) + (filterStartDateTo ? 1 : 0);
 	const hasActiveFilters = filterStatus !== "all" || filterStartDateFrom || filterStartDateTo;
 	const showThumbnails = groupBy === "ad_name" || groupBy === "creative_name";
 
-	if (connectedChannels.length === 0) {
+	if (connectedIntegrations.length === 0) {
 		return (
 			<div className="analytics-dashboard">
 				<div className="analytics-header">
 					<div className="analytics-header-copy">
 						<h1>Analytics</h1>
-						<p>Use the plus button in the sidebar to connect a channel and unlock analytics dashboards.</p>
+						<p>Use the plus button in the sidebar to connect a integration and unlock analytics dashboards.</p>
 					</div>
 				</div>
 
 				<div className="analytics-empty-state-card">
-					<h2>No connected channels yet</h2>
-					<p>Connect a channel to start exploring Top Spend, Top Videos, and Top Images dashboards.</p>
+					<h2>No connected integrations yet</h2>
+					<p>Connect a integration to start exploring Top Spend, Top Videos, and Top Images dashboards.</p>
 				</div>
 			</div>
 		);
@@ -331,7 +331,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ channels, chann
 			<div className="analytics-header">
 				<div className="analytics-header-copy">
 					<h1>{DASHBOARD_OPTIONS.find((option) => option.id === dashboardView)?.label ?? "Top Spend"}</h1>
-					<p>{activeChannel?.name ?? "Analytics"}</p>
+					<p>{activeIntegration?.name ?? "Analytics"}</p>
 				</div>
 			</div>
 

@@ -1,11 +1,11 @@
-import { ChannelInfo, FocusedItemCard, TaskStatus, BrandInfo, ImageConcept, VideoConcept, FrontendIntegrationInfo, IntegrationInfo, IntegrationResultRecord } from './types';
+import { IntegrationInfo, FocusedItemCard, TaskStatus, BrandInfo, ImageConcept, VideoConcept, FrontendIntegrationInfo, WorkspaceIntegrationInfo, IntegrationResultRecord } from './types';
 import { resolveIntegrations } from './integrations';
 
 /**
  * Query parameters for data fetching
  */
 export interface QueryParams {
-    channel?: string;
+    integration?: string;
     groupBy?: 'ad_name' | 'creative_name' | 'headline' | 'ad_copy';
     filters?: {
         display_format?: 'video' | 'image';
@@ -31,7 +31,7 @@ export interface AdData {
     display_format?: 'image' | 'video';
     video_length?: string;
     status?: string;
-    channel_id?: string;
+    integration_id?: string;
     metrics: {
         spend: number;
         roas: number;
@@ -182,14 +182,14 @@ export interface Plan {
  * Global Context - the single source of truth for the agent
  */
 export interface GlobalContext {
-    // Active channel (user-selected or default)
-    channel: ChannelInfo;
+    // Active integration (user-selected or default)
+    integration: IntegrationInfo;
     
     // User-selected followed brands (from context selector)
     followedBrands: BrandInfo[];
 
     // Connected and supported workspace integrations
-    integrations: IntegrationInfo[];
+    integrations: WorkspaceIntegrationInfo[];
     
     // User's original input
     userInput: string;
@@ -232,7 +232,7 @@ export interface GlobalContext {
  * User-provided context from the frontend
  */
 export interface UserContext {
-    channel?: ChannelInfo;
+    integration?: IntegrationInfo;
     brands?: BrandInfo[];
     integrations?: FrontendIntegrationInfo[];
     conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -241,11 +241,13 @@ export interface UserContext {
 /**
  * Create an empty GlobalContext with default values
  */
-export function createEmptyContext(channel: ChannelInfo, userInput: string = '', userContext?: UserContext): GlobalContext {
+export function createEmptyContext(integration: IntegrationInfo, userInput: string = '', userContext?: UserContext): GlobalContext {
+    const integrationInputs = userContext?.integrations || [];
+
     return {
-        channel,
+        integration,
         followedBrands: userContext?.brands || [],
-        integrations: resolveIntegrations(userContext?.integrations || []),
+        integrations: resolveIntegrations(integrationInputs),
         userInput,
         dataSets: [],
         discoveryDataSets: [],
@@ -328,9 +330,9 @@ export function getLatestCreativeReports(context: GlobalContext): CreativeReport
 export function getContextSummary(context: GlobalContext): string {
     const parts: string[] = [];
     
-    // Active channel
-    parts.push(`Channel: ${context.channel.name} (${context.channel.platform})`);
-    parts.push(`Channel ID: ${context.channel.id}`);
+    // Active integration
+    parts.push(`Integration: ${context.integration.name} (${context.integration.platform})`);
+    parts.push(`Integration ID: ${context.integration.id}`);
     
     // User-selected brands
     if (context.followedBrands.length > 0) {

@@ -27,7 +27,7 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 
 ### 1. dataQuery
 - **Purpose**: Fetch and filter YOUR OWN ad data from the analytics API
-- **Capabilities**: Query by channel, group by (ad_name, creative_name, headline, ad_copy), filter by format/status, sort by any metric
+- **Capabilities**: Query by integration, group by (ad_name, creative_name, headline, ad_copy), filter by format/status, sort by any metric
 - **Output**: Returns a dataset of YOUR ads stored in context
 - **Use when**: Need to fetch YOUR OWN ad data, compare metrics, find top/bottom performers
 
@@ -68,11 +68,11 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 - **REQUIRES**: Must run AFTER creativeInsights — needs creative reports in context
 
 ### 8. integrations
-- **Purpose**: Access connected workspace integrations or return connection instructions when they are not connected
-- **Capabilities**: Returns integration context for connected integrations like Slack, Notion, Google Drive, Shopify, Google Analytics, Meta Ads, and TikTok Ads
-- **Output**: Returns integration data OR connection instructions if the integration is available but not connected OR a coming-soon notice
-- **Use when**: User asks for data or actions involving workspace integrations, external briefs, docs, CRM/store context, or posting/sharing results
-- **Important**: If an integration is available but not connected, use this tool to return connection instructions instead of failing the whole plan
+- **Purpose**: Access connected workspace integrations or return integration instructions when they are not connected
+- **Capabilities**: Returns integration context for connected sources like Meta Ads, TikTok Ads, Google Ads, Shopify, Google Analytics, HubSpot, and Salesforce
+- **Output**: Returns integration data OR integration instructions if the integration is available but not connected OR a coming-soon notice
+- **Use when**: User asks for data or actions involving workspace integrations, external context, CRM/store context, or connected ad platforms
+- **Important**: If a integration is available but not connected, use this tool to return integration instructions instead of failing the whole plan
 
 ## PLANNING RULES
 
@@ -101,12 +101,12 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 4. Default to a single source ad for variation generation unless the user explicitly asks for multiple ads
 
 ### For Integration Requests:
-1. Use integrations when the user explicitly asks for Slack, Notion, Google Drive, Shopify, Google Analytics, HubSpot, Salesforce, Meta Ads, or TikTok Ads
+1. Use integrations when the user explicitly asks for Meta Ads, TikTok Ads, Google Ads, Shopify, Google Analytics, HubSpot, or Salesforce
 2. The current context tells you which integrations are connected right now
-3. If the user asks for an integration that is available but not connected, plan an integrations step that returns connection instructions
-4. If the user asks for a coming-soon integration, plan an integrations step that explains that status
+3. If the user asks for a integration that is available but not connected, plan a integrations step that returns integration instructions
+4. If the user asks for a coming-soon integration, plan a integrations step that explains that status
 5. If the request has other independent work, continue with those other steps after the integrations step
-6. Do not use dataQuery/discoveryQuery as a substitute for workspace integrations like Slack, Notion, Google Drive, Shopify, or Google Analytics
+6. Do not use dataQuery/discoveryQuery as a substitute for workspace integrations like Shopify or Google Analytics
 
 ### General Rules:
 - Keep plans concise - avoid redundant steps
@@ -306,11 +306,11 @@ User: "Create new ad variations for my best performing video ads"
     ]
 }
 
-User: "Pull the latest creative brief from Google Drive"
+User: "Use my TikTok integration to compare short-form performance"
 {
-    "objective": "Retrieve the latest creative brief from Google Drive",
+    "objective": "Retrieve TikTok integration context for short-form performance comparison",
     "steps": [
-        { "id": "1", "tool": "integrations", "description": "Fetch the most relevant recent creative brief from Google Drive" }
+        { "id": "1", "tool": "integrations", "description": "Retrieve TikTok Ads integration context or return integration instructions if TikTok Ads is not connected" }
     ]
 }
 
@@ -318,17 +318,17 @@ User: "Use Shopify context and analyze my top ads"
 {
     "objective": "Use Shopify context to enrich analysis of top performing ads",
     "steps": [
-        { "id": "1", "tool": "integrations", "description": "Retrieve recent Shopify sales signals or return connection instructions if Shopify is not connected" },
+        { "id": "1", "tool": "integrations", "description": "Retrieve recent Shopify sales signals or return integration instructions if Shopify is not connected" },
         { "id": "2", "tool": "dataQuery", "description": "Query top ads by ROAS" },
         { "id": "3", "tool": "dataAnalysis", "description": "Analyze top ad performance with any available Shopify context" }
     ]
 }
 
-User: "Post these findings to Slack and keep analyzing my top creatives"
+User: "Pull Google Ads context and keep analyzing my top creatives"
 {
-    "objective": "Share findings to Slack and continue analyzing top creatives",
+    "objective": "Use Google Ads integration context and continue analyzing top creatives",
     "steps": [
-        { "id": "1", "tool": "integrations", "description": "Post or prepare a Slack update with the current findings, or return connection instructions if Slack is not connected" },
+        { "id": "1", "tool": "integrations", "description": "Retrieve Google Ads integration context or return integration instructions if Google Ads is not connected" },
         { "id": "2", "tool": "dataQuery", "description": "Query top performing ads by ROAS" },
         { "id": "3", "tool": "focusItems", "description": "Select top 3 ads" },
         { "id": "4", "tool": "creativeInsights", "description": "Analyze the creative elements of the top ads" }
@@ -339,7 +339,7 @@ User: "Check HubSpot for CRM context"
 {
     "objective": "Determine whether HubSpot context can be used for this request",
     "steps": [
-        { "id": "1", "tool": "integrations", "description": "Check HubSpot availability and return connection or availability instructions" }
+        { "id": "1", "tool": "integrations", "description": "Check HubSpot availability and return integration or availability instructions" }
     ]
 }`
         });

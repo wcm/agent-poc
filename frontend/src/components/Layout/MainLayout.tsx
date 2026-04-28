@@ -1,19 +1,21 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import ChatInterface from "../Chat/ChatInterface";
-import { AnalyticsDashboardView, Message, Session, SessionContext, StreamedSection, PlanTask, SSEEvent, PlanEvent, PlanStatusEvent, Channel as ContextChannel, Brand } from "../../types";
+import { AnalyticsDashboardView, Message, Session, SessionContext, StreamedSection, PlanTask, SSEEvent, PlanEvent, PlanStatusEvent, Integration, Brand, RayaView } from "../../types";
 import DiscoveryFeed from "../Discovery/DiscoveryFeed";
 import FollowingBrands from "../Discovery/FollowingBrands";
 import BrandDetails from "../Discovery/BrandDetails";
 import AnalyticsDashboard from "../Analytics/AnalyticsDashboard";
+import BrandContextPage from "../BrandContext/BrandContextPage";
 import IntegrationsPage from "../Integrations/IntegrationsPage";
 import AutomationsPage from "../Automations/AutomationsPage";
 import { AutomationDefinition, AUTOMATION_STATE_STORAGE_KEY, getInitialAutomations, mergePersistedAutomations } from "../../automations/catalog";
 import {
 	getConnectedIntegrations,
-	getInitialIntegrationConnectionState,
+	getInitialIntegrationState,
 	INTEGRATION_STATE_STORAGE_KEY,
-	IntegrationConnectionState,
+	IntegrationState,
+	resolveIntegrations,
 } from "../../integrations/catalog";
 
 type SeedConversationEntry = Pick<Message, "role" | "content">;
@@ -48,7 +50,7 @@ const createEmptyContext = (): SessionContext => ({
 const MainLayout: React.FC = () => {
 	// Layout State
 	const [activeTab, setActiveTab] = useState("atria");
-	const [activeRayaView, setActiveRayaView] = useState<"tasks" | "integrations" | "automations">("tasks");
+	const [activeRayaView, setActiveRayaView] = useState<RayaView>("tasks");
 	const [activeAutomationId, setActiveAutomationId] = useState<string | null>(null);
 	const [activeAutomationMode, setActiveAutomationMode] = useState<"overview" | "details" | "run">("overview");
 	const [activeAutomationRunId, setActiveAutomationRunId] = useState<string | null>(null);
@@ -61,11 +63,12 @@ const MainLayout: React.FC = () => {
 	const [brandDetailId, setBrandDetailId] = useState<string | null>(null);
 
 	// Analytics State
-	const [channels, setChannels] = useState<ContextChannel[]>([]);
-	const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+	const [integrations, setIntegrations] = useState<Integration[]>([]);
+	const [activeIntegrationId, setActiveIntegrationId] = useState<string | null>(null);
+	const [selectedIntegrationIds, setSelectedIntegrationIds] = useState<string[]>([]);
 	const [activeAnalyticsView, setActiveAnalyticsView] = useState<AnalyticsDashboardView>("top_spend");
-	const [integrationConnectionState, setIntegrationConnectionState] = useState<IntegrationConnectionState>(() => {
-		const defaultState = getInitialIntegrationConnectionState();
+	const [integrationState, setIntegrationState] = useState<IntegrationState>(() => {
+		const defaultState = getInitialIntegrationState();
 		if (typeof window === "undefined") {
 			return defaultState;
 		}
@@ -76,10 +79,10 @@ const MainLayout: React.FC = () => {
 				return defaultState;
 			}
 
-			const parsed = JSON.parse(stored) as IntegrationConnectionState;
+			const parsed = JSON.parse(stored) as IntegrationState;
 			return { ...defaultState, ...parsed };
 		} catch (error) {
-			console.error("Failed to restore integration connection state:", error);
+			console.error("Failed to restore integration state:", error);
 			return defaultState;
 		}
 	});
@@ -122,11 +125,11 @@ const MainLayout: React.FC = () => {
 
 	useEffect(() => {
 		try {
-			window.localStorage.setItem(INTEGRATION_STATE_STORAGE_KEY, JSON.stringify(integrationConnectionState));
+			window.localStorage.setItem(INTEGRATION_STATE_STORAGE_KEY, JSON.stringify(integrationState));
 		} catch (error) {
-			console.error("Failed to persist integration connection state:", error);
+			console.error("Failed to persist integration state:", error);
 		}
-	}, [integrationConnectionState]);
+	}, [integrationState]);
 
 	useEffect(() => {
 		try {
@@ -182,22 +185,23 @@ const MainLayout: React.FC = () => {
 		};
 	}, []);
 
-	// Initial Load - Clear History & Fetch Channels
+	// Initial Load - Clear History & Fetch Integrations
 	useEffect(() => {
 		fetch(`${baseUrl}/api/clear`, { method: "POST" }).catch((err) => console.error("Failed to clear history:", err));
 
 		fetch(`${baseUrl}/api/own-analytics`)
 			.then((res) => res.json())
 			.then((data) => {
-				if (data.channels) {
-					setChannels(data.channels);
-					const firstConnected = data.channels.find((c: ContextChannel) => c.is_connected);
+				const loadedIntegrations = data.integrations;
+				if (loadedIntegrations) {
+					setIntegrations(loadedIntegrations);
+					const firstConnected = loadedIntegrations.find((integration: Integration) => integration.is_connected);
 					if (firstConnected) {
-						setActiveChannelId(firstConnected.id);
+						setActiveIntegrationId(firstConnected.id);
 					}
 				}
 			})
-			.catch((err) => console.error("Failed to fetch channels:", err));
+			.catch((err) => console.error("Failed to fetch integrations:", err));
 	}, [baseUrl]);
 
 	useEffect(() => {
@@ -252,38 +256,72 @@ const MainLayout: React.FC = () => {
 		setBrandDetailId(brandId);
 	};
 
-	const fetchChannels = async () => {
+	const fetchIntegrations = async () => {
 		try {
 			const res = await fetch(`${baseUrl}/api/own-analytics`);
 			const data = await res.json();
-			if (data.channels) {
-				setChannels(data.channels);
-				const connectedChannels = data.channels.filter((channel: ContextChannel) => channel.is_connected);
-				if (!activeChannelId && connectedChannels.length > 0) {
-					setActiveChannelId(connectedChannels[0].id);
+			const loadedIntegrations = data.integrations;
+			if (loadedIntegrations) {
+				setIntegrations(loadedIntegrations);
+				const connectedIntegrations = loadedIntegrations.filter((integration: Integration) => integration.is_connected);
+				if (!activeIntegrationId && connectedIntegrations.length > 0) {
+					setActiveIntegrationId(connectedIntegrations[0].id);
 				}
+				setSelectedIntegrationIds((currentSelection) => {
+					const connectedIds = new Set(connectedIntegrations.map((integration: Integration) => integration.id));
+					const validSelection = currentSelection.filter((id) => connectedIds.has(id));
+					return validSelection;
+				});
 			}
 		} catch (err) {
-			console.error("Failed to fetch channels:", err);
+			console.error("Failed to fetch integrations:", err);
 		}
 	};
 
-	const handleChannelConnect = async (channelId: string) => {
-		const res = await fetch(`${baseUrl}/api/channels/${channelId}/connect`, { method: "POST" });
+	const handleSelectedIntegrationIdsChange = useCallback((integrationIds: string[]) => {
+		setSelectedIntegrationIds(integrationIds);
+		setActiveIntegrationId((currentActiveId) => {
+			if (currentActiveId && integrationIds.includes(currentActiveId)) {
+				return currentActiveId;
+			}
+
+			const selectedAliases = new Set(integrationIds);
+			const selectedBackendIntegration = getConnectedIntegrations(integrations, integrationState).find(
+				(integration) => selectedAliases.has(integration.id) || (integration.integration ? selectedAliases.has(integration.integration.id) : false)
+			)?.integration;
+
+			return selectedBackendIntegration?.id ?? currentActiveId;
+		});
+	}, [integrations, integrationState]);
+
+	const handleIntegrationSelect = useCallback((integrationId: string) => {
+		setActiveIntegrationId(integrationId);
+		setSelectedIntegrationIds((currentSelection) => (currentSelection.includes(integrationId) ? currentSelection : [...currentSelection, integrationId]));
+	}, []);
+
+	const handleIntegrationConnect = async (integrationId: string) => {
+		const res = await fetch(`${baseUrl}/api/integrations/${integrationId}/connect`, { method: "POST" });
 		if (!res.ok) {
-			throw new Error("Failed to connect channel");
+			throw new Error("Failed to connect integration");
 		}
 	};
 
-	const handleIntegrationConnect = useCallback((integrationId: string) => {
-		setIntegrationConnectionState((prev) => ({
+	const handleIntegrationDisconnect = async (integrationId: string) => {
+		const res = await fetch(`${baseUrl}/api/integrations/${integrationId}/disconnect`, { method: "POST" });
+		if (!res.ok) {
+			throw new Error("Failed to disconnect integration");
+		}
+	};
+
+	const handleIntegrationStateConnect = useCallback((integrationId: string) => {
+		setIntegrationState((prev) => ({
 			...prev,
 			[integrationId]: true,
 		}));
 	}, []);
 
-	const handleIntegrationDisconnect = useCallback((integrationId: string) => {
-		setIntegrationConnectionState((prev) => ({
+	const handleIntegrationStateDisconnect = useCallback((integrationId: string) => {
+		setIntegrationState((prev) => ({
 			...prev,
 			[integrationId]: false,
 		}));
@@ -542,7 +580,7 @@ const MainLayout: React.FC = () => {
 
 	const handleSendMessage = async (
 		content: string,
-		context?: { channel?: ContextChannel; brands?: Brand[] },
+		context?: { integration?: Integration; brands?: Brand[] },
 		options?: SendMessageOptions
 	) => {
 		setActiveRayaView("tasks");
@@ -596,26 +634,29 @@ const MainLayout: React.FC = () => {
 
 		closeSessionStream(sessionId);
 
-		const channelParam = activeChannelId ? `&channelId=${encodeURIComponent(activeChannelId)}` : "";
+		const mockIntegration = integrations.find((integration) => integration.id === "meta_ads") || integrations[0];
+		const integrationParam = `&integrationId=${encodeURIComponent("meta_ads")}`;
 		const sessionParam = `&sessionId=${encodeURIComponent(sessionId)}`;
 
 		let contextParam = "";
-		const integrationContext = connectedIntegrations.map((integration) => ({
+		const selectedIntegrationAliases = new Set(selectedIntegrationIds);
+		const selectedResolvedIntegrations = connectedIntegrations.filter(
+			(integration) => selectedIntegrationAliases.has(integration.id) || (integration.integration ? selectedIntegrationAliases.has(integration.integration.id) : false)
+		);
+		const integrationContext = selectedResolvedIntegrations.map((integration) => ({
 			id: integration.id,
 			name: integration.name,
 			status: "connected" as const,
 		}));
-		if (context || integrationContext.length > 0 || (options?.seedConversationHistory?.length ?? 0) > 0) {
-			const contextData = {
-				channel: context?.channel,
-				brands: context?.brands,
-				integrations: integrationContext,
-				conversationHistory: options?.seedConversationHistory,
-			};
-			contextParam = `&context=${encodeURIComponent(JSON.stringify(contextData))}`;
-		}
+		const contextData = {
+			integration: context?.integration ?? mockIntegration,
+			brands: context?.brands,
+			integrations: integrationContext,
+			conversationHistory: options?.seedConversationHistory,
+		};
+		contextParam = `&context=${encodeURIComponent(JSON.stringify(contextData))}`;
 
-		const apiUrl = `${baseUrl}/api/stream?message=${encodeURIComponent(content)}${channelParam}${sessionParam}${contextParam}`;
+		const apiUrl = `${baseUrl}/api/stream?message=${encodeURIComponent(content)}${integrationParam}${sessionParam}${contextParam}`;
 		const eventSource = new EventSource(apiUrl);
 		eventSourcesRef.current.set(sessionId, eventSource);
 
@@ -647,7 +688,7 @@ const MainLayout: React.FC = () => {
 				const fallbackSections =
 					session.streamingSections.length > 0
 						? session.streamingSections
-						: [{ type: "text", content: "⚠️ Error: Connection interrupted before the task completed." } as StreamedSection];
+						: [{ type: "text", content: "⚠️ Error: Integration interrupted before the task completed." } as StreamedSection];
 
 				return {
 					...session,
@@ -693,7 +734,9 @@ const MainLayout: React.FC = () => {
 	const currentStreamingSections = activeSession?.streamingSections || [];
 	const currentPlanStates = new Map<string, PlanTask[]>(Object.entries(activeSession?.planTaskStates || {}));
 	const currentIsLoading = activeSession?.status === "running";
-	const connectedIntegrations = getConnectedIntegrations(channels, integrationConnectionState);
+	const resolvedIntegrations = resolveIntegrations(integrations, integrationState);
+	const connectedIntegrations = resolvedIntegrations.filter((integration) => integration.isConnected);
+	const myConnections = resolvedIntegrations.filter((integration) => integration.section === "myConnections");
 	const activeAutomations = automations.filter((automation) => automation.status === "active");
 
 	return (
@@ -720,39 +763,44 @@ const MainLayout: React.FC = () => {
 				onAutomationModeChange={handleAutomationModeChange}
 				activeAnalyticsView={activeAnalyticsView}
 				onAnalyticsViewChange={setActiveAnalyticsView}
-				channels={channels}
-				activeChannelId={activeChannelId || undefined}
-				onChannelSelect={setActiveChannelId}
-				onChannelConnect={handleChannelConnect}
-				onRefreshChannels={fetchChannels}
+				integrations={integrations}
+				onIntegrationSelect={handleIntegrationSelect}
+				onIntegrationConnect={handleIntegrationConnect}
+				onRefreshIntegrations={fetchIntegrations}
 			/>
 			<div className="main-content">
 				{activeTab === "atria" ? (
-					activeRayaView === "integrations" ? (
+					activeRayaView === "brandContext" ? (
+						<BrandContextPage brandName={activeBrand} />
+					) : activeRayaView === "integrations" ? (
 						<IntegrationsPage
-							channels={channels}
-							integrationConnectionState={integrationConnectionState}
-							onChannelConnect={handleChannelConnect}
-							onRefreshChannels={fetchChannels}
-							onConnectIntegration={handleIntegrationConnect}
-							onDisconnectIntegration={handleIntegrationDisconnect}
+							integrations={integrations}
+							integrationState={integrationState}
+							onIntegrationConnect={handleIntegrationConnect}
+							onIntegrationDisconnect={handleIntegrationDisconnect}
+							onRefreshIntegrations={fetchIntegrations}
+							onConnectIntegration={handleIntegrationStateConnect}
+							onDisconnectIntegration={handleIntegrationStateDisconnect}
 						/>
 					) : activeRayaView === "automations" ? (
 						<AutomationsPage
 							automations={automations}
 							activeAutomationId={activeAutomationId}
 							activeAutomationMode={activeAutomationMode}
-							channels={channels}
-							activeChannelId={activeChannelId}
+							integrations={integrations}
+							activeIntegrationId={activeIntegrationId}
+							activeBrand={activeBrand}
 							initialRunId={activeAutomationRunId}
 							composerPrefill={activeAutomationComposerPrefill}
-							integrationConnectionState={integrationConnectionState}
+							integrationState={integrationState}
 							onAutomationSelect={handleAutomationSelect}
 							onAutomationModeChange={handleAutomationModeChange}
 							onSaveAutomation={handleSaveAutomation}
-							onChannelConnect={handleChannelConnect}
-							onRefreshChannels={fetchChannels}
-							onConnectIntegration={handleIntegrationConnect}
+							onIntegrationConnect={handleIntegrationConnect}
+							onRefreshIntegrations={fetchIntegrations}
+							onConnectIntegration={handleIntegrationStateConnect}
+							onDisconnectIntegration={handleIntegrationStateDisconnect}
+							onOpenBrandContext={() => setActiveRayaView("brandContext")}
 							onTestAutomation={handleTestAutomation}
 							onContinueAutomationRun={handleContinueAutomationRun}
 						/>
@@ -765,9 +813,15 @@ const MainLayout: React.FC = () => {
 							planStates={currentPlanStates}
 							onSendMessage={handleSendMessage}
 							onOpenIntegrations={() => setActiveRayaView("integrations")}
+							onOpenBrandContext={() => setActiveRayaView("brandContext")}
 							connectedIntegrations={connectedIntegrations}
-							channels={channels}
-							activeChannelId={activeChannelId}
+							myConnections={myConnections}
+							activeIntegrationId={activeIntegrationId}
+							activeBrand={activeBrand}
+							selectedIntegrationIds={selectedIntegrationIds}
+							onSelectedIntegrationIdsChange={handleSelectedIntegrationIdsChange}
+							onConnectMyConnection={handleIntegrationStateConnect}
+							onDisconnectMyConnection={handleIntegrationStateDisconnect}
 							homeAutomations={activeAutomations}
 							onOpenAutomationRun={handleOpenAutomationRun}
 							onExploreAutomations={handleOpenAutomationsOverview}
@@ -785,9 +839,9 @@ const MainLayout: React.FC = () => {
 					)
 				) : activeTab === "analytics" ? (
 					<AnalyticsDashboard
-						channels={channels}
-						channelId={activeChannelId || undefined}
-						onChannelChange={setActiveChannelId}
+						integrations={integrations}
+						integrationId={activeIntegrationId || undefined}
+						onIntegrationChange={setActiveIntegrationId}
 						dashboardView={activeAnalyticsView}
 					/>
 				) : (

@@ -1,6 +1,6 @@
 import { Tool } from '../tool-base';
 import { GlobalContext, DataSet, QueryParams, AdData, generateId } from '../context';
-import { ChannelInfo } from '../types';
+import { IntegrationInfo } from '../types';
 import { logger } from '../utils/logger';
 
 /**
@@ -58,7 +58,7 @@ Your job is to translate analysis requests into query parameters for the analyti
 ## OUTPUT FORMAT
 Return a JSON object ONLY:
 {
-    "channel": "channel_id from input",
+    "integration": "integration id from input",
     "groupBy": "ad_name" | "creative_name" | "headline" | "ad_copy",
     "filters": {
         "display_format": "video" | "image" | null,
@@ -69,7 +69,7 @@ Return a JSON object ONLY:
 }
 
 ## RULES
-1. Extract channel ID from the context
+1. Extract integration ID from the context
 2. Choose groupBy based on what the analysis needs (default: ad_name)
 3. Apply filters only if explicitly requested
 4. Default sortBy to "roas" for performance queries, "spend" for spend queries
@@ -78,13 +78,13 @@ Return a JSON object ONLY:
 ## EXAMPLES
 
 Task: "Query top 5 ads by ROAS"
-Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": {}, "sortBy": "roas", "sortOrder": "desc" }
+Output: { "integration": "meta_ads", "groupBy": "ad_name", "filters": {}, "sortBy": "roas", "sortOrder": "desc" }
 
 Task: "Query video ads sorted by spend"
-Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": { "display_format": "video" }, "sortBy": "spend", "sortOrder": "desc" }
+Output: { "integration": "meta_ads", "groupBy": "ad_name", "filters": { "display_format": "video" }, "sortBy": "spend", "sortOrder": "desc" }
 
 Task: "Query worst performing ads"
-Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": {}, "sortBy": "roas", "sortOrder": "asc" }`
+Output: { "integration": "meta_ads", "groupBy": "ad_name", "filters": {}, "sortBy": "roas", "sortOrder": "asc" }`
         });
         // Use localhost with dynamic port for server-side calls
         const port = process.env.PORT || 3002;
@@ -99,9 +99,9 @@ Output: { "channel": "channel_1", "groupBy": "ad_name", "filters": {}, "sortBy":
 
         // 1. Get query parameters from LLM
         const queryInput = `
-Channel ID: ${context.channel.id}
-Channel Name: ${context.channel.name}
-Platform: ${context.channel.platform}
+Integration ID: ${context.integration.id}
+Integration Name: ${context.integration.name}
+Platform: ${context.integration.platform}
 
 Task: ${stepDescription}
 
@@ -129,10 +129,13 @@ Generate the query parameters.
         // 2. Build URL with query parameters
         const params = new URLSearchParams();
         
-        if (queryParams.channel) {
-            params.append('channel', queryParams.channel);
+        const requestedIntegration = queryParams.integration;
+        if (requestedIntegration) {
+            params.append('integration', requestedIntegration);
+            queryParams.integration = requestedIntegration;
         } else {
-            params.append('channel', context.channel.id);
+            params.append('integration', context.integration.id);
+            queryParams.integration = context.integration.id;
         }
         if (queryParams.groupBy) {
             params.append('groupBy', queryParams.groupBy);
@@ -197,7 +200,7 @@ Generate the query parameters.
             context.dataSets.push(dataSet);
 
             // 7. Generate confirmation message
-            const message = this.generateMessage(dataSet, queryParams, context.channel);
+            const message = this.generateMessage(dataSet, queryParams, context.integration);
 
             return { dataSet, message };
 
@@ -210,15 +213,15 @@ Generate the query parameters.
     /**
      * Generate a comprehensive message about the query and results
      */
-    private generateMessage(dataSet: DataSet, queryParams: QueryParams, channel: ChannelInfo): string {
+    private generateMessage(dataSet: DataSet, queryParams: QueryParams, integration: IntegrationInfo): string {
         // const topItems = dataSet.data.slice(0, 3);
         const sortField = queryParams.sortBy || 'spend';
         const sortOrder = queryParams.sortOrder || 'desc';
         
         let message = `**Query Details:**\n`;
         
-        // Channel info
-        message += `- Channel: ${channel.name} (${channel.platform})\n`;
+        // Data source info
+        message += `- Integration: ${integration.name} (${integration.platform})\n`;
         
         // Query parameters section
         message += `- Group by: ${queryParams.groupBy || 'ad_name'}\n`;

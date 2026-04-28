@@ -50,10 +50,10 @@ app.get('/api/stream', async (req: Request, res: Response) => {
     res.flushHeaders();
 
     const message = req.query.message as string;
-    const channelId = (req.query.channelId as string) || 'channel_1';
+    const integrationId = (req.query.integrationId as string) || 'meta_ads';
     const sessionId = (req.query.sessionId as string) || 'default';
     
-    // Parse user-provided context (channel and brands)
+    // Parse user-provided context (integration and brands)
     let userContext: UserContext | undefined;
     if (req.query.context) {
         try {
@@ -80,7 +80,7 @@ app.get('/api/stream', async (req: Request, res: Response) => {
 
     try {
         // handleRequest streams events and returns void
-        await agent.handleRequest(message, channelId, userContext);
+        await agent.handleRequest(message, integrationId, userContext);
     } catch (error: any) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
         res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
@@ -127,9 +127,9 @@ app.get('/api/own-brands', async (req: Request, res: Response) => {
     }
 });
 
-// Get own analytics data (channels and ads with metrics)
+// Get own analytics data (integrations and ads with metrics)
 // Supports query params:
-// - channel: filter by channel_id (default: all channels)
+// - integration: filter by integration id (default: all integrations)
 // - groupBy: ad_name (default), creative_name, headline, ad_copy
 // - display_format: filter by 'video' or 'image'
 // - status: filter by 'active' or 'inactive'
@@ -141,16 +141,16 @@ app.get('/api/own-analytics', async (req: Request, res: Response) => {
         let ads = analytics.ads as any[];
 
         // Extract query params
-        const channel = req.query.channel as string | undefined;
+        const integration = req.query.integration as string | undefined;
         const groupBy = (req.query.groupBy as string) || 'ad_name';
         const displayFormat = req.query.display_format as string | undefined;
         const status = req.query.status as string | undefined;
         const startDateFrom = req.query.start_date_from as string | undefined;
         const startDateTo = req.query.start_date_to as string | undefined;
 
-        // Filter by channel
-        if (channel) {
-            ads = ads.filter((ad: any) => ad.channel_id === channel);
+        // Filter by integration
+        if (integration) {
+            ads = ads.filter((ad: any) => ad.integration_id === integration);
         }
 
         // Filter by display_format
@@ -184,7 +184,8 @@ app.get('/api/own-analytics', async (req: Request, res: Response) => {
                 ...ad,
                 ad_count: 1
             }));
-            res.json({ channels: analytics.channels, ads: result, groupBy: groupByField });
+            const integrations = analytics.integrations;
+            res.json({ integrations, ads: result, groupBy: groupByField });
             return;
         }
 
@@ -253,7 +254,7 @@ app.get('/api/own-analytics', async (req: Request, res: Response) => {
             // Create aggregated ad entry
             return {
                 id: `grouped_${groupByField}_${groupValue.replace(/\s+/g, '_').toLowerCase()}`,
-                channel_id: firstAd.channel_id,
+                integration_id: firstAd.integration_id,
                 ad_name: groupByField === 'ad_name' ? groupValue : `${groupValue} (${adCount} ads)`,
                 creative_name: groupByField === 'creative_name' ? groupValue : firstAd.creative_name,
                 headline: groupByField === 'headline' ? groupValue : firstAd.headline,
@@ -271,7 +272,8 @@ app.get('/api/own-analytics', async (req: Request, res: Response) => {
             };
         });
 
-        res.json({ channels: analytics.channels, ads: aggregatedAds, groupBy: groupByField });
+        const integrations = analytics.integrations;
+        res.json({ integrations, ads: aggregatedAds, groupBy: groupByField });
     } catch (error) {
         console.error('Error loading analytics:', error);
         res.status(500).json({ error: 'Failed to load analytics data' });
@@ -414,24 +416,49 @@ app.post('/api/ads/:id/bookmark', async (req: Request, res: Response) => {
     }
 });
 
-// Connect a channel
-app.post('/api/channels/:id/connect', async (req: Request, res: Response) => {
+const connectIntegration = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const analytics = await readJson('own-analytics.json');
-        const channel = analytics.channels.find((c: any) => c.id === id);
-        if (channel) {
-            channel.is_connected = true;
+        const integrations = analytics.integrations;
+        const integration = integrations.find((c: any) => c.id === id);
+        if (integration) {
+            integration.is_connected = true;
             await writeJson('own-analytics.json', analytics);
-            res.json(channel);
+            res.json(integration);
         } else {
-            res.status(404).json({ error: 'Channel not found' });
+            res.status(404).json({ error: 'Data source not found' });
         }
     } catch (error) {
-        console.error('Error connecting channel:', error);
-        res.status(500).json({ error: 'Failed to connect channel' });
+        console.error('Error connecting integration:', error);
+        res.status(500).json({ error: 'Failed to connect integration' });
     }
-});
+};
+
+const disconnectIntegration = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const analytics = await readJson('own-analytics.json');
+        const integrations = analytics.integrations;
+        const integration = integrations.find((c: any) => c.id === id);
+        if (integration) {
+            integration.is_connected = false;
+            await writeJson('own-analytics.json', analytics);
+            res.json(integration);
+        } else {
+            res.status(404).json({ error: 'Data source not found' });
+        }
+    } catch (error) {
+        console.error('Error disconnecting integration:', error);
+        res.status(500).json({ error: 'Failed to disconnect integration' });
+    }
+};
+
+// Connect a integration.
+app.post('/api/integrations/:id/connect', connectIntegration);
+app.post('/api/integrations/:id/connect', connectIntegration);
+app.post('/api/integrations/:id/disconnect', disconnectIntegration);
+app.post('/api/integrations/:id/disconnect', disconnectIntegration);
 
 // Anything that doesn't match the above, send back index.html
 app.get(/.*/, (req, res) => {

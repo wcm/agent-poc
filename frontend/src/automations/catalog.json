@@ -1,16 +1,16 @@
 [
   {
-    "id": "weekly-winners-losers-slack",
+    "id": "weekly-winners-losers-meta",
     "name": "Weekly Winners & Losers",
-    "description": "Send a weekly summary of the strongest and weakest performers to Slack.",
-    "prompt": "Review the most recent 7-day window available in the connected ad account data and identify the clearest winners and losers across ads, audiences, or campaigns. Summarize what improved, what declined, and why those patterns likely happened based on efficiency, spend, CTR, CPA, ROAS, conversion rate, and creative signals. Then prepare and send a Slack-ready report with: 1. a short executive summary, 2. the top winners with supporting metrics and reasons they worked, 3. the top losers with supporting metrics and likely causes, 4. notable shifts or anomalies to watch, and 5. a short list of recommended next actions for the team.",
+    "description": "Prepare a weekly summary of the strongest and weakest performers from connected sources.",
+    "prompt": "Review the most recent 7-day window available in the connected source data and identify the clearest winners and losers across ads, audiences, or campaigns. Summarize what improved, what declined, and why those patterns likely happened based on efficiency, spend, CTR, CPA, ROAS, conversion rate, and creative signals. Then prepare a integration-ready report with: 1. a short executive summary, 2. the top winners with supporting metrics and reasons they worked, 3. the top losers with supporting metrics and likely causes, 4. notable shifts or anomalies to watch, and 5. a short list of recommended next actions for the team.",
     "frequency": "weekly",
     "delivery": {
       "day": "Monday",
       "time": "09:30"
     },
     "status": "active",
-    "integrations": ["slack"],
+    "integrations": ["meta_ads"],
     "history": [
       {
         "timestamp": "2026-04-20T09:30:00+08:00",
@@ -30,16 +30,16 @@
     ]
   },
   {
-    "id": "daily-slack-brief",
+    "id": "daily-integration-brief",
     "name": "Daily Brief",
-    "description": "Send a concise creative and performance recap to Slack every morning.",
-    "prompt": "Compare yesterday's campaign and creative performance against the day before across spend, CTR, CPA, ROAS, conversion rate, and notable creative movement. Focus first on the highest-spend ads and any ads with the biggest performance swings. Identify what improved, what declined, which ads or hook angles changed meaningfully, and call out any unusual spikes, slowdowns, or risks that need attention. Then deliver a concise Slack update with: 1. a short executive summary of yesterday vs the prior day, 2. the top 3 creative wins, 3. the top risks or watchouts, and 4. 2-3 clear next-step recommendations for the team.",
+    "description": "Prepare a concise creative and performance recap every morning.",
+    "prompt": "Compare yesterday's campaign and creative performance against the day before across spend, CTR, CPA, ROAS, conversion rate, and notable creative movement. Focus first on the highest-spend ads and any ads with the biggest performance swings. Identify what improved, what declined, which ads or hook angles changed meaningfully, and call out any unusual spikes, slowdowns, or risks that need attention. Then deliver a concise integration-ready update with: 1. a short executive summary of yesterday vs the prior day, 2. the top 3 creative wins, 3. the top risks or watchouts, and 4. 2-3 clear next-step recommendations for the team.",
     "frequency": "daily",
     "delivery": {
       "time": "09:00"
     },
     "status": "active",
-    "integrations": ["slack"],
+    "integrations": ["meta_ads", "tiktok_ads"],
     "history": [
       {
         "timestamp": "2026-04-21T09:00:00+08:00",
@@ -59,17 +59,17 @@
     ]
   },
   {
-    "id": "weekly-scaling-opportunities-notion",
+    "id": "weekly-scaling-opportunities-meta",
     "name": "Scaling Opportunities",
-    "description": "Publish a weekly Notion report on the strongest opportunities to scale winning creatives, audiences, and campaigns.",
-    "prompt": "Review the most recent 7-day window available in the connected ad account data and identify the clearest scaling opportunities across campaigns, audiences, and creatives. Focus on combinations that show strong ROAS, efficient CPA, healthy CTR, stable or improving conversion behavior, and enough spend or momentum to justify further investment. Explain which winners are ready to scale now, which ones need controlled testing before scaling, what risks could break efficiency, and what exact budget or creative expansion actions should happen next. Then publish a structured Notion report with: 1. an executive summary, 2. the top scaling opportunities with supporting metrics, 3. why each opportunity looks durable, 4. risks or guardrails to watch, and 5. a prioritized action plan for the coming week.",
+    "description": "Prepare a weekly report on the strongest opportunities to scale winning creatives, audiences, and campaigns.",
+    "prompt": "Review the most recent 7-day window available in the connected source data and identify the clearest scaling opportunities across campaigns, audiences, and creatives. Focus on combinations that show strong ROAS, efficient CPA, healthy CTR, stable or improving conversion behavior, and enough spend or momentum to justify further investment. Explain which winners are ready to scale now, which ones need controlled testing before scaling, what risks could break efficiency, and what exact budget or creative expansion actions should happen next. Then publish a structured report with: 1. an executive summary, 2. the top scaling opportunities with supporting metrics, 3. why each opportunity looks durable, 4. risks or guardrails to watch, and 5. a prioritized action plan for the coming week.",
     "frequency": "weekly",
     "delivery": {
       "day": "Tuesday",
       "time": "10:00"
     },
     "status": "active",
-    "integrations": ["notion"],
+    "integrations": ["meta_ads"],
     "history": [
       {
         "timestamp": "2026-04-14T10:00:00+08:00",
@@ -89,17 +89,17 @@
     ]
   },
   {
-    "id": "weekly-under-explored-areas-slack",
+    "id": "weekly-under-explored-areas-tiktok",
     "name": "Under Explored Areas",
-    "description": "Compare competitor winners against your best creatives and send a weekly Slack report on under-explored whitespace.",
-    "prompt": "Compare the strongest recent competitor creatives against my strongest recent creatives and identify the most important under-explored areas in our current creative strategy. Look across creative angles, formats, hooks, personas, offers, visual styles, and messaging patterns to find where competitors are winning or investing in ways we have not explored enough. Consolidate the analysis into a weekly Slack-ready report with: 1. a short executive summary, 2. the top competitor patterns showing momentum, 3. the creative angles, formats, and personas that are currently under-explored on our side, 4. the biggest whitespace opportunities to test next, and 5. a short prioritized list of recommended experiments for the creative team.",
+    "description": "Compare competitor winners against your best creatives and prepare a weekly whitespace report.",
+    "prompt": "Compare the strongest recent competitor creatives against my strongest recent creatives and identify the most important under-explored areas in our current creative strategy. Look across creative angles, formats, hooks, personas, offers, visual styles, and messaging patterns to find where competitors are winning or investing in ways we have not explored enough. Consolidate the analysis into a weekly integration-ready report with: 1. a short executive summary, 2. the top competitor patterns showing momentum, 3. the creative angles, formats, and personas that are currently under-explored on our side, 4. the biggest whitespace opportunities to test next, and 5. a short prioritized list of recommended experiments for the creative team.",
     "frequency": "weekly",
     "delivery": {
       "day": "Friday",
       "time": "15:30"
     },
     "status": "active",
-    "integrations": ["slack"],
+    "integrations": ["tiktok_ads"],
     "history": [
       {
         "timestamp": "2026-04-17T15:30:00+08:00",
@@ -119,31 +119,31 @@
     ]
   },
   {
-    "id": "weekly-inspirations-google-drive",
+    "id": "weekly-inspirations-google-ads",
     "name": "Weekly Inspirations",
-    "description": "Analyze your top-performing ads, generate fresh angle variations, and save the inspiration pack to Google Drive.",
-    "prompt": "Review the strongest recent ads from the connected ad account and identify the top-performing hooks, angles, personas, formats, and messaging structures that are most worth iterating on. Use those winners as the base to generate a weekly inspiration pack with fresh variations: new hooks, alternate personas, adjacent angles, stronger offers, format twists, and creative directions that stay grounded in what is already working. For each selected winner, explain why it is performing, what should be preserved, what should be changed, and propose several next-step variations the team can build from immediately. Then save the final inspiration pack to Google Drive in a clear structure with: 1. an executive summary, 2. the top source ads worth iterating on, 3. the key winning patterns behind them, 4. a set of recommended new angles and variations, and 5. clear creative prompts or notes for production.",
+    "description": "Analyze your top-performing ads and generate fresh angle variations from connected sources.",
+    "prompt": "Review the strongest recent ads from connected sources and identify the top-performing hooks, angles, personas, formats, and messaging structures that are most worth iterating on. Use those winners as the base to generate a weekly inspiration pack with fresh variations: new hooks, alternate personas, adjacent angles, stronger offers, format twists, and creative directions that stay grounded in what is already working. For each selected winner, explain why it is performing, what should be preserved, what should be changed, and propose several next-step variations the team can build from immediately. Then prepare the final inspiration pack in a clear structure with: 1. an executive summary, 2. the top source ads worth iterating on, 3. the key winning patterns behind them, 4. a set of recommended new angles and variations, and 5. clear creative prompts or notes for production.",
     "frequency": "weekly",
     "delivery": {
       "day": "Wednesday",
       "time": "14:00"
     },
     "status": "inactive",
-    "integrations": ["google_drive"],
+    "integrations": ["google_ads", "meta_ads"],
     "history": []
   },
   {
-    "id": "weekly-notion-report",
-    "name": "Weekly Notion Report",
-    "description": "Publish a weekly performance recap and next-step recommendations into Notion.",
-    "prompt": "Create a detailed weekly marketing report that summarizes the past 7 days of performance, creative learnings, and execution priorities. Include: 1. an executive summary of the week, 2. the strongest and weakest campaigns or creatives, 3. key changes in efficiency or conversion trends, 4. notable creative patterns such as winning hooks, visuals, or messaging angles, 5. a shortlist of opportunities to scale or test next, and 6. a clear action plan for the coming week. Publish the report to Notion in a clean structure with section headings and decision-ready recommendations.",
+    "id": "weekly-performance-report",
+    "name": "Weekly Performance Report",
+    "description": "Prepare a weekly performance recap and next-step recommendations.",
+    "prompt": "Create a detailed weekly marketing report that summarizes the past 7 days of performance, creative learnings, and execution priorities. Include: 1. an executive summary of the week, 2. the strongest and weakest campaigns or creatives, 3. key changes in efficiency or conversion trends, 4. notable creative patterns such as winning hooks, visuals, or messaging angles, 5. a shortlist of opportunities to scale or test next, and 6. a clear action plan for the coming week. Prepare the report in a clean structure with section headings and decision-ready recommendations.",
     "frequency": "weekly",
     "delivery": {
       "day": "Monday",
       "time": "10:30"
     },
     "status": "inactive",
-    "integrations": ["notion", "google_drive"],
+    "integrations": ["meta_ads"],
     "history": []
   },
   {
@@ -161,17 +161,17 @@
     "history": []
   },
   {
-    "id": "weekly-creative-source-pack",
-    "name": "Weekly Creative Source Pack",
-    "description": "Collect the latest briefs and inspiration files into a weekly package for review.",
-    "prompt": "Gather the most relevant recent briefs, reference files, feedback notes, and source materials from Google Drive for the upcoming week. Organize them into a weekly source pack that helps the creative team start fast: group materials by campaign, product, audience, or objective, highlight the newest or most important files, note any missing inputs or contradictions, and identify the top references that should influence upcoming ads. Prepare a concise summary of what was included and send the creative team a Slack-ready handoff note with the most important context and priorities.",
+    "id": "weekly-integration-source-pack",
+    "name": "Weekly Integration Source Pack",
+    "description": "Collect the latest connected-source signals into a weekly package for review.",
+    "prompt": "Gather the most relevant recent signals, reference patterns, feedback notes, and source materials from connected sources for the upcoming week. Organize them into a weekly source pack that helps the creative team start fast: group materials by campaign, product, audience, or objective, highlight the newest or most important inputs, note any missing inputs or contradictions, and identify the top references that should influence upcoming ads. Prepare a concise summary of what was included with the most important context and priorities.",
     "frequency": "weekly",
     "delivery": {
       "day": "Thursday",
       "time": "16:00"
     },
     "status": "inactive",
-    "integrations": ["google_drive", "slack"],
+    "integrations": ["google_ads", "tiktok_ads"],
     "history": []
   }
 ]

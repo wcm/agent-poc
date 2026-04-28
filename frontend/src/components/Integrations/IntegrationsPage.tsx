@@ -1,53 +1,63 @@
-import React, { useMemo, useState } from "react";
-import { Check, Search, ShieldCheck } from "lucide-react";
-import { Channel } from "../../types";
+import React, { useEffect, useMemo, useState } from "react";
+import { Check, MoreHorizontal, Search, ShieldCheck } from "lucide-react";
+import { Integration } from "../../types";
 import {
 	filterIntegrations,
-	getConnectableChannelId,
-	INTEGRATION_SECTIONS,
-	IntegrationConnectionState,
-	QUICK_ADD_INTEGRATION_IDS,
+	getConnectableIntegrationId,
+	INTEGRATIONS_PAGE_SECTIONS,
+	IntegrationState,
 	resolveIntegrations,
 } from "../../integrations/catalog";
 
 interface IntegrationsPageProps {
-	channels: Channel[];
-	integrationConnectionState: IntegrationConnectionState;
-	onChannelConnect: (channelId: string) => Promise<void>;
-	onRefreshChannels: () => Promise<void> | void;
+	integrations: Integration[];
+	integrationState: IntegrationState;
+	onIntegrationConnect: (integrationId: string) => Promise<void>;
+	onIntegrationDisconnect: (integrationId: string) => Promise<void>;
+	onRefreshIntegrations: () => Promise<void> | void;
 	onConnectIntegration: (integrationId: string) => Promise<void> | void;
 	onDisconnectIntegration: (integrationId: string) => Promise<void> | void;
 }
 
 const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
-	channels,
-	integrationConnectionState,
-	onChannelConnect,
-	onRefreshChannels,
+	integrations,
+	integrationState,
+	onIntegrationConnect,
+	onIntegrationDisconnect,
+	onRefreshIntegrations,
 	onConnectIntegration,
 	onDisconnectIntegration,
 }) => {
 	const [query, setQuery] = useState("");
 	const [connectingId, setConnectingId] = useState<string | null>(null);
 	const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+	const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 	const [toastMessage, setToastMessage] = useState("");
 
-	const integrations = useMemo(
-		() =>
-			filterIntegrations(resolveIntegrations(channels, integrationConnectionState), query).filter(
-				(integration) => !QUICK_ADD_INTEGRATION_IDS.includes(integration.id as (typeof QUICK_ADD_INTEGRATION_IDS)[number])
-			),
-		[channels, integrationConnectionState, query]
-	);
+	const resolvedIntegrations = useMemo(() => filterIntegrations(resolveIntegrations(integrations, integrationState), query), [integrations, integrationState, query]);
 
 	const groupedIntegrations = useMemo(
 		() =>
-			INTEGRATION_SECTIONS.map((section) => ({
+			INTEGRATIONS_PAGE_SECTIONS.map((section) => ({
 				...section,
-				items: integrations.filter((integration) => integration.section === section.id),
+				items: resolvedIntegrations.filter((integration) => integration.section === section.id),
 			})).filter((section) => section.items.length > 0),
-		[integrations]
+		[resolvedIntegrations]
 	);
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			const target = event.target as HTMLElement | null;
+			if (target?.closest(".integration-card-menu")) {
+				return;
+			}
+
+			setOpenMenuId(null);
+		};
+
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
 
 	const showToast = (message: string) => {
 		setToastMessage(message);
@@ -55,17 +65,17 @@ const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
 	};
 
 	const handleConnect = async (integrationId: string) => {
-		const integration = integrations.find((item) => item.id === integrationId);
+		const integration = resolvedIntegrations.find((item) => item.id === integrationId);
 		if (!integration || integration.status !== "available") {
 			return;
 		}
 
-		const connectableChannelId = getConnectableChannelId(integration);
+		const connectableIntegrationId = getConnectableIntegrationId(integration);
 		setConnectingId(integrationId);
 		try {
-			if (connectableChannelId) {
-				await onChannelConnect(connectableChannelId);
-				await onRefreshChannels();
+			if (connectableIntegrationId) {
+				await onIntegrationConnect(connectableIntegrationId);
+				await onRefreshIntegrations();
 			} else {
 				await onConnectIntegration(integration.id);
 			}
@@ -79,20 +89,21 @@ const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
 	};
 
 	const handleDisconnect = async (integrationId: string) => {
-		const integration = integrations.find((item) => item.id === integrationId);
+		const integration = resolvedIntegrations.find((item) => item.id === integrationId);
 		if (!integration || integration.status !== "connected") {
 			return;
 		}
 
-		const connectableChannelId = getConnectableChannelId(integration);
+		const connectableIntegrationId = getConnectableIntegrationId(integration);
 		setDisconnectingId(integrationId);
+		setOpenMenuId(null);
 		try {
-			if (connectableChannelId && integration.channel) {
-				showToast(`Disconnect ${integration.name} from Channels soon.`);
-				return;
+			if (connectableIntegrationId && integration.integration) {
+				await onIntegrationDisconnect(connectableIntegrationId);
+				await onRefreshIntegrations();
+			} else {
+				await onDisconnectIntegration(integration.id);
 			}
-
-			await onDisconnectIntegration(integration.id);
 			showToast(`${integration.name} disconnected.`);
 		} catch (error) {
 			console.error("Failed to disconnect integration:", error);
@@ -102,15 +113,20 @@ const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
 		}
 	};
 
+	const handleConnectedAction = (integrationName: string, action: "manage" | "add") => {
+		setOpenMenuId(null);
+		showToast(action === "manage" ? `Manage accounts for ${integrationName} coming soon.` : `Add account for ${integrationName} coming soon.`);
+	};
+
 	return (
 		<div className="integrations-page">
 			<div className="integrations-page-shell">
 				<div className="integrations-page-header">
 					<div className="integrations-page-copy">
 						<h1>Integrations</h1>
-						<p>Add integrations to this ad account to make Raya more intelligent. Integrations are shared within the workspace.</p>
+						<p>Connect data sources and tools that help Raya work across your team.</p>
 					</div>
-					<label className="integrations-search" aria-label="Search integrations">
+					<label className="workspace-search" aria-label="Search integrations">
 						<Search size={18} />
 						<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search integrations..." />
 					</label>
@@ -124,24 +140,44 @@ const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
 								const isDisconnecting = disconnectingId === integration.id;
 								const isConnected = integration.status === "connected";
 								const isAvailable = integration.status === "available";
+								const description = isConnected && integration.connectedAccountName ? `Connected account: ${integration.connectedAccountName}` : integration.description;
 								return (
-									<div key={integration.id} className={`integration-card ${isConnected ? "is-connected" : ""}`}>
+									<div
+										key={integration.id}
+										className={`integration-card ${isConnected ? "is-connected" : ""} ${
+											integration.status === "coming_soon" ? "is-coming-soon" : ""
+										}`}
+									>
 										<div className="integration-card-top">
 											<div className="integration-card-logo">{integration.renderLogo(44)}</div>
 											{isConnected ? (
-												<div className="integration-card-status">
-													<div className="integration-card-status-badge">
-														<Check size={14} />
-														<span>Connected</span>
-													</div>
+												<div className="integration-card-menu">
 													<button
 														type="button"
-														className="integration-card-action disconnect"
-														disabled={isDisconnecting}
-														onClick={() => handleDisconnect(integration.id)}
+														className={`integration-card-menu-trigger ${openMenuId === integration.id ? "is-open" : ""}`}
+														aria-label={`Manage ${integration.name}`}
+														onClick={() => setOpenMenuId((current) => (current === integration.id ? null : integration.id))}
 													>
-														{isDisconnecting ? "Disconnecting..." : "Disconnect"}
+														<MoreHorizontal size={16} />
 													</button>
+													{openMenuId === integration.id && (
+														<div className="integration-card-menu-dropdown">
+															<button type="button" onClick={() => handleConnectedAction(integration.name, "manage")}>
+																Manage accounts
+															</button>
+															<button type="button" onClick={() => handleConnectedAction(integration.name, "add")}>
+																Add account
+															</button>
+															<button
+																type="button"
+																className="danger"
+																disabled={isDisconnecting}
+																onClick={() => handleDisconnect(integration.id)}
+															>
+																{isDisconnecting ? "Deleting..." : "Delete all"}
+															</button>
+														</div>
+													)}
 												</div>
 											) : (
 												<button
@@ -155,8 +191,16 @@ const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
 											)}
 										</div>
 										<div className="integration-card-content">
-											<h3>{integration.name}</h3>
-											<p>{integration.description}</p>
+											<div className="integration-card-title-row">
+												<h3>{integration.name}</h3>
+												{isConnected && (
+													<div className="integration-card-connected-label">
+														<Check size={12} />
+														<span>Connected</span>
+													</div>
+												)}
+											</div>
+											<p className={isConnected && integration.connectedAccountName ? "is-connected-account" : ""}>{description}</p>
 										</div>
 									</div>
 								);

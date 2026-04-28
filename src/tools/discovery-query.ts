@@ -63,7 +63,7 @@ Return a JSON object ONLY:
 2. **DEFAULT status to "active"** - most users want to see currently running competitor ads
 3. Only set status to "inactive" if user explicitly asks for "past ads", "ended campaigns", "old ads", or "inactive"
 4. Only filter by brand if user explicitly mentions: "Adidas", "On Running", "Lululemon"
-5. NEVER use the user's own brand/channel as a filter - this API is for COMPETITOR ads only
+5. NEVER use the user's own brand/integration as a filter - this API is for COMPETITOR ads only
 6. For platform, use lowercase: "instagram", "facebook", "tiktok", "youtube"
 
 ## EXAMPLES
@@ -112,7 +112,7 @@ Output: { "status": "inactive", "sort": "latest" }`
         // 1. Get query parameters from LLM
         const queryInput = `
 IMPORTANT: This is for fetching COMPETITOR ads, NOT the user's own ads.
-The user's own channel is "${context.channel.name}" - DO NOT use this as a filter.
+The user's own integration is "${context.integration.name}" - DO NOT use this as a filter.
 Available competitor brands in database: Adidas, On Running, Lululemon
 
 Task: ${stepDescription}
@@ -236,4 +236,3 @@ Generate the query parameters.
 }
 
 export const discoveryQueryTool = new DiscoveryQueryToolWrapper();
-

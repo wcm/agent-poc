@@ -65,7 +65,7 @@ Summary (1-2 sentences) with a SPECIFIC suggested next action or question.
 Examples:
 - "Based on this analysis, your video hooks outperform images by 40%. Would you like me to analyze what makes your video intros effective?"
 - "I found that urgency messaging drives 2x higher ROAS. Want me to suggest ways to add urgency to your underperforming ads?"
-- "Your top ads share a 'social proof' pattern. Should I compare these patterns against your TikTok channel?"
+- "Your top ads share a 'social proof' pattern. Should I compare these patterns against your TikTok integration?"
 
 ### ERROR
 Friendly error message explaining what went wrong.

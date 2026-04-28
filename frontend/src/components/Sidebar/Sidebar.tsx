@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { House, User, PanelLeftClose, PanelLeftOpen, Globe, Heart, Bookmark, Plug, ChevronDown, LayoutDashboard, Clock3 } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { BookOpenText, House, User, PanelLeftClose, PanelLeftOpen, Globe, Heart, Bookmark, LayoutDashboard, Clock3, ChevronDown } from "lucide-react";
 import BrandSelector from "./BrandSelector";
-import { AnalyticsDashboardView, Channel, Session } from "../../types";
+import { AnalyticsDashboardView, Integration, RayaView, Session } from "../../types";
 import { AutomationDefinition } from "../../automations/catalog";
-import ConnectChannelMenu from "../Channels/ConnectChannelMenu";
+import ConnectIntegrationMenu from "../Integrations/ConnectIntegrationMenu";
 import RayaLogo from "../icons/RayaLogo";
-import { PlatformLogo } from "../icons/ServiceLogos";
+import IntegrationsIcon from "../icons/IntegrationsIcon";
 
 const RayaIcon = ({ filled }: { filled?: boolean }) => <RayaLogo size={22} variant={filled ? "color" : "mono"} />;
 
@@ -39,8 +39,6 @@ const RocketIcon = ({ filled }: { filled?: boolean }) => (
 	</svg>
 );
 
-const getPlatformIcon = (platform: string) => <PlatformLogo platform={platform} size={16} />;
-
 interface SidebarProps {
 	activeTab: string;
 	onTabChange: (tab: string) => void;
@@ -54,8 +52,8 @@ interface SidebarProps {
 	onToggleCollapse: () => void;
 	activeInspirationTab?: string;
 	onInspirationTabChange?: (tab: string) => void;
-	activeRayaView?: "tasks" | "integrations" | "automations";
-	onRayaViewChange?: (view: "tasks" | "integrations" | "automations") => void;
+	activeRayaView?: RayaView;
+	onRayaViewChange?: (view: RayaView) => void;
 	automations?: AutomationDefinition[];
 	activeAutomationId?: string | null;
 	activeAutomationMode?: "overview" | "details" | "run";
@@ -63,11 +61,10 @@ interface SidebarProps {
 	onAutomationModeChange?: (mode: "overview" | "details" | "run") => void;
 	activeAnalyticsView?: AnalyticsDashboardView;
 	onAnalyticsViewChange?: (view: AnalyticsDashboardView) => void;
-	channels?: Channel[];
-	activeChannelId?: string;
-	onChannelSelect?: (channelId: string) => void;
-	onChannelConnect?: (channelId: string) => Promise<void>;
-	onRefreshChannels?: () => Promise<void> | void;
+	integrations?: Integration[];
+	onIntegrationSelect?: (integrationId: string) => void;
+	onIntegrationConnect?: (integrationId: string) => Promise<void>;
+	onRefreshIntegrations?: () => Promise<void> | void;
 }
 
 const ANALYTICS_DASHBOARDS: Array<{ id: AnalyticsDashboardView; label: string }> = [
@@ -98,29 +95,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 	onAutomationModeChange,
 	activeAnalyticsView = "top_spend",
 	onAnalyticsViewChange,
-	channels = [],
-	activeChannelId,
-	onChannelSelect,
-	onChannelConnect,
-	onRefreshChannels,
+	integrations = [],
+	onIntegrationSelect,
+	onIntegrationConnect,
+	onRefreshIntegrations,
 }) => {
-	const [isAnalyticsChannelDropdownOpen, setAnalyticsChannelDropdownOpen] = useState(false);
 	const orderedSessions = [...sessions].sort((a, b) => (b.lastActivityAt ?? b.createdAt) - (a.lastActivityAt ?? a.createdAt));
 	const activeAutomations = useMemo(() => automations.filter((automation) => automation.status === "active"), [automations]);
-	const connectedChannels = useMemo(() => channels.filter((channel) => channel.is_connected), [channels]);
-	const activeAnalyticsChannel = connectedChannels.find((channel) => channel.id === activeChannelId) || connectedChannels[0] || null;
-	const analyticsDropdownRef = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (analyticsDropdownRef.current && !analyticsDropdownRef.current.contains(event.target as Node)) {
-				setAnalyticsChannelDropdownOpen(false);
-			}
-		};
-
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
+	const [isActiveAutomationsCollapsed, setIsActiveAutomationsCollapsed] = useState(false);
 
 	const handleNewTaskClick = () => {
 		onRayaViewChange?.("tasks");
@@ -131,6 +113,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 	const handleAutomationSettingsClick = () => {
 		onRayaViewChange?.("automations");
+		onAutomationSelect?.(null);
+		onAutomationModeChange?.("overview");
+	};
+
+	const handleBrandContextClick = () => {
+		onRayaViewChange?.("brandContext");
 		onAutomationSelect?.(null);
 		onAutomationModeChange?.("overview");
 	};
@@ -151,10 +139,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 	return (
 		<div className={`sidebar-container ${isCollapsed ? "collapsed" : ""}`}>
-			<div className="sidebar-top-section">
-				<BrandSelector activeBrand={activeBrand} onBrandChange={onBrandChange} isCollapsed={isCollapsed} />
-			</div>
-
 			<div className="sidebar-body">
 				<div className="sidebar-l1">
 					<div className="l1-nav-items">
@@ -180,11 +164,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 						<div className="l2-header">
 							<span className="l2-title">{navItems.find((item) => item.id === activeTab)?.label}</span>
 							{(activeTab === "atria" || activeTab === "analytics") && (
-								<ConnectChannelMenu
-									channels={channels}
-									onChannelConnect={onChannelConnect || (async () => {})}
-									onRefreshChannels={onRefreshChannels || (() => {})}
-									onChannelSelect={(channelId) => onChannelSelect?.(channelId)}
+								<ConnectIntegrationMenu
+									integrations={integrations}
+									onIntegrationConnect={onIntegrationConnect || (async () => {})}
+									onRefreshIntegrations={onRefreshIntegrations || (() => {})}
+									onIntegrationSelect={(integrationId) => onIntegrationSelect?.(integrationId)}
 									buttonClassName="l2-header-icon-btn"
 									menuClassName="sidebar-connect-menu-dropdown"
 								/>
@@ -194,50 +178,19 @@ const Sidebar: React.FC<SidebarProps> = ({
 						<div className="l2-content">
 							{activeTab === "atria" && (
 								<>
-									{connectedChannels.length > 0 ? (
-										<>
-											<div className="analytics-sidebar-dropdown" ref={analyticsDropdownRef}>
-												<button type="button" className="analytics-sidebar-dropdown-trigger" onClick={() => setAnalyticsChannelDropdownOpen((prev) => !prev)}>
-													<span className="analytics-sidebar-channel-value">
-														{activeAnalyticsChannel ? (
-															<>
-																{getPlatformIcon(activeAnalyticsChannel.platform)}
-																<span className="session-item-title">{activeAnalyticsChannel.name}</span>
-															</>
-														) : (
-															<span className="session-item-title">Select a channel</span>
-														)}
-													</span>
-													<ChevronDown size={16} className={isAnalyticsChannelDropdownOpen ? "open" : ""} />
-												</button>
-												{isAnalyticsChannelDropdownOpen && (
-													<div className="analytics-sidebar-dropdown-menu">
-														{connectedChannels.map((channel) => (
-															<button
-																key={channel.id}
-																type="button"
-																className={`analytics-sidebar-dropdown-item ${activeAnalyticsChannel?.id === channel.id ? "active" : ""}`}
-																onClick={() => {
-																	onChannelSelect?.(channel.id);
-																	setAnalyticsChannelDropdownOpen(false);
-																}}
-															>
-																{getPlatformIcon(channel.platform)}
-																<span className="session-item-title">{channel.name}</span>
-															</button>
-														))}
-													</div>
-												)}
-											</div>
-										</>
-									) : (
-										<div className="empty-sessions">No channels connected</div>
-									)}
+									<div className="sidebar-brand-dropdown">
+										<BrandSelector activeBrand={activeBrand} onBrandChange={onBrandChange} isCollapsed={false} />
+									</div>
 
 									<div className="raya-primary-nav-group">
 										<div className={`session-item raya-new-task-item ${activeRayaView === "tasks" && !activeSessionId ? "active" : ""}`} onClick={handleNewTaskClick}>
 											<House size={16} />
 											<span className="session-item-title">Home</span>
+										</div>
+
+										<div className={`session-item raya-subview-item ${activeRayaView === "brandContext" ? "active" : ""}`} onClick={handleBrandContextClick}>
+											<BookOpenText size={16} />
+											<span className="session-item-title">Brand Context</span>
 										</div>
 
 										<div
@@ -248,7 +201,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 												onAutomationModeChange?.("overview");
 											}}
 										>
-											<Plug size={16} />
+											<IntegrationsIcon size={16} />
 											<span className="session-item-title">Integrations</span>
 										</div>
 
@@ -263,18 +216,28 @@ const Sidebar: React.FC<SidebarProps> = ({
 										</div>
 									</div>
 
-									<div className="section-label">Active Automations</div>
-									<div className="session-list automation-sidebar-list">
-										{activeAutomations.map((automation) => (
-											<div
-												key={automation.id}
-												className={`session-item automation-sidebar-item ${activeRayaView === "automations" && activeAutomationId === automation.id ? "active" : ""}`}
-												onClick={() => handleAutomationItemClick(automation.id)}
-											>
-												<span className="session-item-title">{automation.name}</span>
-											</div>
-										))}
-									</div>
+									<button
+										type="button"
+										className={`automation-section-toggle ${isActiveAutomationsCollapsed ? "is-collapsed" : ""}`}
+										onClick={() => setIsActiveAutomationsCollapsed((currentValue) => !currentValue)}
+										aria-expanded={!isActiveAutomationsCollapsed}
+									>
+										<span>Active Automations</span>
+										<ChevronDown size={14} />
+									</button>
+									{!isActiveAutomationsCollapsed && (
+										<div className="session-list automation-sidebar-list">
+											{activeAutomations.map((automation) => (
+												<div
+													key={automation.id}
+													className={`session-item automation-sidebar-item ${activeRayaView === "automations" && activeAutomationId === automation.id ? "active" : ""}`}
+													onClick={() => handleAutomationItemClick(automation.id)}
+												>
+													<span className="session-item-title">{automation.name}</span>
+												</div>
+											))}
+										</div>
+									)}
 
 									<div className="section-label">My Tasks</div>
 									<div className="session-list">
@@ -298,59 +261,23 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 							{activeTab === "analytics" && (
 								<>
-									{connectedChannels.length > 0 ? (
-										<>
-											<div className="analytics-sidebar-dropdown" ref={analyticsDropdownRef}>
-												<button type="button" className="analytics-sidebar-dropdown-trigger" onClick={() => setAnalyticsChannelDropdownOpen((prev) => !prev)}>
-													<span className="analytics-sidebar-channel-value">
-														{activeAnalyticsChannel ? (
-															<>
-																{getPlatformIcon(activeAnalyticsChannel.platform)}
-																<span className="session-item-title">{activeAnalyticsChannel.name}</span>
-															</>
-														) : (
-															<span className="session-item-title">Select a channel</span>
-														)}
-													</span>
-													<ChevronDown size={16} className={isAnalyticsChannelDropdownOpen ? "open" : ""} />
-												</button>
-												{isAnalyticsChannelDropdownOpen && (
-													<div className="analytics-sidebar-dropdown-menu">
-														{connectedChannels.map((channel) => (
-															<button
-																key={channel.id}
-																type="button"
-																className={`analytics-sidebar-dropdown-item ${activeAnalyticsChannel?.id === channel.id ? "active" : ""}`}
-																onClick={() => {
-																	onChannelSelect?.(channel.id);
-																	setAnalyticsChannelDropdownOpen(false);
-																}}
-															>
-																{getPlatformIcon(channel.platform)}
-																<span className="session-item-title">{channel.name}</span>
-															</button>
-														))}
-													</div>
-												)}
-											</div>
+									<div className="sidebar-brand-dropdown">
+										<BrandSelector activeBrand={activeBrand} onBrandChange={onBrandChange} isCollapsed={false} />
+									</div>
 
-											<div className="section-label">Dashboards</div>
-											<div className="session-list">
-												{ANALYTICS_DASHBOARDS.map((dashboard) => (
-													<div
-														key={dashboard.id}
-														className={`session-item analytics-dashboard-item ${activeAnalyticsView === dashboard.id ? "active" : ""}`}
-														onClick={() => onAnalyticsViewChange?.(dashboard.id)}
-													>
-														<LayoutDashboard size={16} />
-														<span className="session-item-title">{dashboard.label}</span>
-													</div>
-												))}
+									<div className="section-label">Dashboards</div>
+									<div className="session-list">
+										{ANALYTICS_DASHBOARDS.map((dashboard) => (
+											<div
+												key={dashboard.id}
+												className={`session-item analytics-dashboard-item ${activeAnalyticsView === dashboard.id ? "active" : ""}`}
+												onClick={() => onAnalyticsViewChange?.(dashboard.id)}
+											>
+												<LayoutDashboard size={16} />
+												<span className="session-item-title">{dashboard.label}</span>
 											</div>
-										</>
-									) : (
-										<div className="empty-sessions">No channels connected</div>
-									)}
+										))}
+									</div>
 								</>
 							)}
 

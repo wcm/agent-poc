@@ -6,7 +6,7 @@ import { FocusedItemCard, FrontendIntegrationInfo, ImageConcept, PlanTask, SSEEv
 interface AutomationCatalogEntry {
     id: string;
     prompt: string;
-    integrations: string[];
+    integrations?: string[];
 }
 
 type CapturedStatus = "success" | "failed";
@@ -108,21 +108,23 @@ const parseArgs = () => {
     const [automationId, ...flags] = process.argv.slice(2);
 
     if (!automationId) {
-        throw new Error("Usage: ts-node src/scripts/record-automation-run.ts <automation-id> [--timestamp=ISO8601] [--channel-id=channel_1]");
+        throw new Error("Usage: ts-node src/scripts/record-automation-run.ts <automation-id> [--timestamp=ISO8601] [--integration-id=meta_ads]");
     }
 
     let timestamp = new Date().toISOString();
-    let channelId = "channel_1";
+    let integrationId = "meta_ads";
 
     flags.forEach((flag) => {
         if (flag.startsWith("--timestamp=")) {
             timestamp = flag.slice("--timestamp=".length);
-        } else if (flag.startsWith("--channel-id=")) {
-            channelId = flag.slice("--channel-id=".length);
+        } else if (flag.startsWith("--integration-id=")) {
+            integrationId = flag.slice("--integration-id=".length);
+        } else if (flag.startsWith("--integration-id=")) {
+            integrationId = flag.slice("--integration-id=".length);
         }
     });
 
-    return { automationId, timestamp, channelId };
+    return { automationId, timestamp, integrationId };
 };
 
 const loadAutomationCatalog = (): AutomationCatalogEntry[] => {
@@ -332,7 +334,7 @@ const writeRunsFile = (runs: CapturedRun[]) => {
 };
 
 async function main() {
-    const { automationId, timestamp, channelId } = parseArgs();
+    const { automationId, timestamp, integrationId } = parseArgs();
     const automations = loadAutomationCatalog();
     const automation = automations.find((entry) => entry.id === automationId);
 
@@ -347,8 +349,8 @@ async function main() {
         recorder.applyEvent(event);
     });
 
-    await agent.handleRequest(automation.prompt, channelId, {
-        integrations: buildConnectedIntegrations(automation.integrations),
+    await agent.handleRequest(automation.prompt, integrationId, {
+        integrations: buildConnectedIntegrations(automation.integrations ?? []),
     });
 
     const capturedRun = recorder.finalize();

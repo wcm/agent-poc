@@ -191,7 +191,7 @@ export interface SessionContext {
         id: string;
         title: string;
         content: string;
-        channelId: string;
+        integrationId: string;
         timestamp: number;
     }>;
     focusedItems: FocusedItemCard[];
@@ -272,9 +272,9 @@ export interface AgentOutputSection {
 }
 
 /**
- * Channel type for ad accounts
+ * Integration type for connected integrations
  */
-export interface Channel {
+export interface Integration {
     id: string;
     name: string;
     platform: string;
@@ -283,6 +283,8 @@ export interface Channel {
 }
 
 export type AnalyticsDashboardView = "top_spend" | "top_videos" | "top_images";
+
+export type RayaView = "tasks" | "brandContext" | "integrations" | "automations";
 
 /**
  * Brand and Ad types

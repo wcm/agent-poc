@@ -1,4 +1,4 @@
-import { FrontendIntegrationInfo, IntegrationAvailability, IntegrationInfo } from './types';
+import { IntegrationAvailability, FrontendIntegrationInfo, WorkspaceIntegrationInfo } from './types';
 
 interface IntegrationRegistryItem {
     id: string;
@@ -13,29 +13,22 @@ const INTEGRATION_REGISTRY: IntegrationRegistryItem[] = [
         id: 'meta_ads',
         name: 'Meta Ads',
         availability: 'available',
-        capabilities: ['read ad account context', 'campaign summaries', 'creative performance signals'],
+        capabilities: ['read integration context', 'campaign summaries', 'creative performance signals'],
         keywords: ['meta', 'facebook ads', 'instagram ads', 'meta ads']
     },
     {
         id: 'tiktok_ads',
         name: 'TikTok Ads',
         availability: 'available',
-        capabilities: ['read ad account context', 'campaign summaries', 'creative performance signals'],
+        capabilities: ['read integration context', 'campaign summaries', 'creative performance signals'],
         keywords: ['tiktok', 'tik tok', 'tiktok ads']
     },
     {
-        id: 'slack',
-        name: 'Slack',
+        id: 'google_ads',
+        name: 'Google Ads',
         availability: 'available',
-        capabilities: ['read channel updates', 'draft message responses', 'posting summaries'],
-        keywords: ['slack', 'slack channel', 'message slack', 'post to slack']
-    },
-    {
-        id: 'notion',
-        name: 'Notion',
-        availability: 'available',
-        capabilities: ['read pages', 'read briefs', 'read databases', 'workspace docs'],
-        keywords: ['notion', 'notion doc', 'notion page', 'brief from notion']
+        capabilities: ['read search campaigns', 'read YouTube campaign signals', 'performance insights'],
+        keywords: ['google ads', 'google search', 'youtube ads']
     },
     {
         id: 'google_analytics',
@@ -50,13 +43,6 @@ const INTEGRATION_REGISTRY: IntegrationRegistryItem[] = [
         availability: 'available',
         capabilities: ['read store sales signals', 'read top products', 'conversion summaries'],
         keywords: ['shopify', 'store sales', 'shopify sales', 'shopify products']
-    },
-    {
-        id: 'google_drive',
-        name: 'Google Drive',
-        availability: 'available',
-        capabilities: ['read files', 'read recent briefs', 'drive documents'],
-        keywords: ['google drive', 'drive', 'shared drive', 'brief from drive']
     },
     {
         id: 'hubspot',
@@ -74,7 +60,7 @@ const INTEGRATION_REGISTRY: IntegrationRegistryItem[] = [
     }
 ];
 
-export function resolveIntegrations(connectedIntegrations: FrontendIntegrationInfo[] = []): IntegrationInfo[] {
+export function resolveIntegrations(connectedIntegrations: FrontendIntegrationInfo[] = []): WorkspaceIntegrationInfo[] {
     const connectedIds = new Set(connectedIntegrations.map((integration) => integration.id));
 
     return INTEGRATION_REGISTRY.map((integration) => ({
@@ -90,7 +76,7 @@ export function resolveIntegrations(connectedIntegrations: FrontendIntegrationIn
     }));
 }
 
-export function getConnectedIntegrationInputs(integrations: IntegrationInfo[]): FrontendIntegrationInfo[] {
+export function getConnectedIntegrationInputs(integrations: WorkspaceIntegrationInfo[]): FrontendIntegrationInfo[] {
     return integrations
         .filter((integration) => integration.status === 'connected')
         .map((integration) => ({
@@ -104,7 +90,7 @@ export function getIntegrationRegistryItem(id: string): IntegrationRegistryItem 
     return INTEGRATION_REGISTRY.find((integration) => integration.id === id) || null;
 }
 
-export function findIntegrationByText(text: string, integrations: IntegrationInfo[] = resolveIntegrations()): IntegrationInfo | null {
+export function findIntegrationByText(text: string, integrations: WorkspaceIntegrationInfo[] = resolveIntegrations()): WorkspaceIntegrationInfo | null {
     const normalized = text.toLowerCase();
 
     return (

@@ -40,7 +40,7 @@ const rawAutomationCatalog = automationCatalog as AutomationDefinition[];
 const cloneAutomation = (automation: AutomationDefinition): AutomationDefinition => ({
 	...automation,
 	delivery: { ...automation.delivery },
-	integrations: [...automation.integrations],
+	integrations: [...(automation.integrations ?? [])],
 	history: automation.history.map((entry) => ({ ...entry })),
 });
 

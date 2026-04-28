@@ -1,28 +1,28 @@
 import React, { useMemo, useState } from "react";
 import { X, Check } from "lucide-react";
-import { Channel } from "../../types";
-import { INTEGRATION_SECTIONS, getConnectableChannelId, resolveIntegrations } from "../../integrations/catalog";
+import { Integration } from "../../types";
+import { INTEGRATIONS_PAGE_SECTIONS, getConnectableIntegrationId, resolveIntegrations } from "../../integrations/catalog";
 
-interface AddChannelModalProps {
+interface AddIntegrationModalProps {
 	isOpen: boolean;
 	onClose: () => void;
-	channels: Channel[];
-	onChannelSelect: (channelId: string) => void;
-	onChannelConnect: (channelId: string) => Promise<void>;
-	onRefreshChannels: () => Promise<void> | void;
+	integrations: Integration[];
+	onIntegrationSelect: (integrationId: string) => void;
+	onIntegrationConnect: (integrationId: string) => Promise<void>;
+	onRefreshIntegrations: () => Promise<void> | void;
 }
 
-const AddChannelModal: React.FC<AddChannelModalProps> = ({ isOpen, onClose, channels, onChannelSelect, onChannelConnect, onRefreshChannels }) => {
+const AddIntegrationModal: React.FC<AddIntegrationModalProps> = ({ isOpen, onClose, integrations, onIntegrationSelect, onIntegrationConnect, onRefreshIntegrations }) => {
 	const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false });
 	const [connecting, setConnecting] = useState<string | null>(null);
 
 	const integrationsBySection = useMemo(
 		() =>
-			INTEGRATION_SECTIONS.map((section) => ({
+			INTEGRATIONS_PAGE_SECTIONS.map((section) => ({
 				...section,
-				items: resolveIntegrations(channels).filter((integration) => integration.section === section.id),
+				items: resolveIntegrations(integrations).filter((integration) => integration.section === section.id),
 			})).filter((section) => section.items.length > 0),
-		[channels]
+		[integrations]
 	);
 
 	if (!isOpen) return null;
@@ -39,7 +39,7 @@ const AddChannelModal: React.FC<AddChannelModalProps> = ({ isOpen, onClose, chan
 	};
 
 	const handleIntegrationClick = async (integrationId: string) => {
-		const integration = resolveIntegrations(channels).find((item) => item.id === integrationId);
+		const integration = resolveIntegrations(integrations).find((item) => item.id === integrationId);
 		if (!integration) {
 			return;
 		}
@@ -48,56 +48,56 @@ const AddChannelModal: React.FC<AddChannelModalProps> = ({ isOpen, onClose, chan
 			return;
 		}
 
-		if (integration.status === "connected" && integration.channel) {
-			onChannelSelect(integration.channel.id);
+		if (integration.status === "connected" && integration.integration) {
+			onIntegrationSelect(integration.integration.id);
 			onClose();
 			return;
 		}
 
-		const connectableChannelId = getConnectableChannelId(integration);
-		if (!connectableChannelId) {
+		const connectableIntegrationId = getConnectableIntegrationId(integration);
+		if (!connectableIntegrationId) {
 			return;
 		}
 
 		setConnecting(integration.id);
 		try {
-			await onChannelConnect(connectableChannelId);
-			await onRefreshChannels();
+			await onIntegrationConnect(connectableIntegrationId);
+			await onRefreshIntegrations();
 			showToast(`${integration.name} connected successfully!`);
 			window.setTimeout(() => {
-				onChannelSelect(connectableChannelId);
+				onIntegrationSelect(connectableIntegrationId);
 				onClose();
 			}, 900);
 		} catch (error) {
-			console.error("Failed to connect channel:", error);
-			showToast("Failed to connect channel. Please try again.");
+			console.error("Failed to connect integration:", error);
+			showToast("Failed to connect integration. Please try again.");
 		} finally {
 			setConnecting(null);
 		}
 	};
 
 	return (
-		<div className="add-channel-backdrop" onClick={handleBackdropClick}>
-			<div className="add-channel-modal">
-				<div className="add-channel-header">
-					<h2>Add Channel</h2>
+		<div className="add-integration-backdrop" onClick={handleBackdropClick}>
+			<div className="add-integration-modal">
+				<div className="add-integration-header">
+					<h2>Add Integration</h2>
 					<button className="close-btn" onClick={onClose}>
 						<X size={20} />
 					</button>
 				</div>
-				<p className="add-channel-subtitle">Connect your marketing channels to unlock insights</p>
+				<p className="add-integration-subtitle">Connect your integrations to unlock insights</p>
 
-				<div className="channel-categories">
+				<div className="integration-categories">
 					{integrationsBySection.map((section) => (
-						<div key={section.id} className="channel-category">
+						<div key={section.id} className="integration-category">
 							<div className="category-name">{section.label}</div>
-							<div className="channel-chips">
+							<div className="integration-chips">
 								{section.items.map((integration) => {
 									const isConnecting = connecting === integration.id;
 									return (
 										<button
 											key={integration.id}
-											className={`channel-chip ${isConnecting ? "connecting" : ""} ${integration.status === "connected" ? "connected" : ""}`}
+											className={`integration-chip ${isConnecting ? "connecting" : ""} ${integration.status === "connected" ? "connected" : ""}`}
 											onClick={() => handleIntegrationClick(integration.id)}
 										>
 											<span className="chip-icon">{integration.renderLogo(20)}</span>
@@ -124,4 +124,4 @@ const AddChannelModal: React.FC<AddChannelModalProps> = ({ isOpen, onClose, chan
 	);
 };
 
-export default AddChannelModal;
+export default AddIntegrationModal;

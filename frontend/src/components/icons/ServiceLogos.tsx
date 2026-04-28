@@ -8,12 +8,18 @@ import shopifyLogo from "../../assets/logos/shopify.png";
 import googleDriveLogo from "../../assets/logos/google-drive.png";
 import hubspotLogo from "../../assets/logos/hubspot.png";
 import salesforceLogo from "../../assets/logos/salesforce.png";
+import clickupLogo from "../../assets/logos/clickup.png";
+import asanaLogo from "../../assets/logos/asana.png";
+import googleAdsLogo from "../../assets/logos/google-ads.png";
 
 export type ServiceLogoId =
 	| "meta"
 	| "tiktok"
 	| "slack"
 	| "notion"
+	| "clickup"
+	| "asana"
+	| "google_ads"
 	| "google_analytics"
 	| "shopify"
 	| "google_drive"
@@ -25,6 +31,9 @@ const LOGO_SOURCES: Record<ServiceLogoId, string> = {
 	tiktok: tiktokLogo,
 	slack: slackLogo,
 	notion: notionLogo,
+	clickup: clickupLogo,
+	asana: asanaLogo,
+	google_ads: googleAdsLogo,
 	google_analytics: googleAnalyticsLogo,
 	shopify: shopifyLogo,
 	google_drive: googleDriveLogo,

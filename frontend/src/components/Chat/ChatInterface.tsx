@@ -1,18 +1,20 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, useLayoutEffect } from "react";
-import { ArrowUp, Sparkles, LucideIcon, Plus, ImageIcon, FileText, Heart } from "lucide-react";
-import { Channel, Message, StreamedSection, PlanTask, ImageConcept, VideoConcept } from "../../types";
+import { ArrowUp, Sparkles, LucideIcon, Plus, ImageIcon, FileText, Heart, Check, Plug } from "lucide-react";
+import { Message, StreamedSection, PlanTask, ImageConcept, VideoConcept } from "../../types";
 import StreamingMessage from "./StreamingMessage";
 import { MessageContent } from "../../MessageContent";
 import PlanTimeline from "./PlanTimeline";
 import DocumentPanel, { ChatDocument } from "./DocumentPanel";
 import AssistantStreamingIndicator, { AssistantStreamingPhase } from "./AssistantStreamingIndicator";
-import { QUICK_ADD_INTEGRATION_IDS, ResolvedIntegration } from "../../integrations/catalog";
+import { ResolvedIntegration } from "../../integrations/catalog";
 import PromptSuggestions from "./PromptSuggestions";
 import { PromptLibraryItem } from "./promptLibrary";
 import RayaLogo from "../icons/RayaLogo";
 import { AutomationDefinition } from "../../automations/catalog";
 import AutomationHighlights from "./AutomationHighlights";
-import { PlatformLogo } from "../icons/ServiceLogos";
+import { findBrandContext, getBrandContext, getBrandContextCompletionScore, getBrandContextPrimaryLogo } from "../../brandContext/catalog";
+import BrandLogoMark from "../BrandContext/BrandLogoMark";
+import MyConnectionsModal from "./MyConnectionsModal";
 
 interface ChatInterfaceProps {
 	sessionId: string | null;
@@ -22,9 +24,15 @@ interface ChatInterfaceProps {
 	planStates: Map<string, PlanTask[]>;
 	onSendMessage: (message: string) => void;
 	onOpenIntegrations: () => void;
+	onOpenBrandContext: () => void;
 	connectedIntegrations: ResolvedIntegration[];
-	channels: Channel[];
-	activeChannelId: string | null;
+	myConnections: ResolvedIntegration[];
+	activeIntegrationId: string | null;
+	activeBrand: string;
+	selectedIntegrationIds?: string[];
+	onSelectedIntegrationIdsChange?: (integrationIds: string[]) => void;
+	onConnectMyConnection: (integrationId: string) => Promise<void> | void;
+	onDisconnectMyConnection: (integrationId: string) => Promise<void> | void;
 	showComposer?: boolean;
 	headerContent?: React.ReactNode;
 	prefilledInput?: string | null;
@@ -151,9 +159,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	planStates,
 	onSendMessage,
 	onOpenIntegrations,
+	onOpenBrandContext,
 	connectedIntegrations,
-	channels,
-	activeChannelId,
+	myConnections,
+	activeIntegrationId,
+	activeBrand,
+	selectedIntegrationIds,
+	onSelectedIntegrationIdsChange,
+	onConnectMyConnection,
+	onDisconnectMyConnection,
 	showComposer = true,
 	headerContent,
 	prefilledInput,
@@ -166,6 +180,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
 	const [isDocumentPanelOpen, setIsDocumentPanelOpen] = useState(false);
 	const [isComposerMenuOpen, setIsComposerMenuOpen] = useState(false);
+	const [isMyConnectionsModalOpen, setIsMyConnectionsModalOpen] = useState(false);
 	const chatMessagesAreaRef = useRef<HTMLDivElement>(null);
 	const initialScrollSessionRef = useRef<string | null>(null);
 	const composerMenuRef = useRef<HTMLDivElement>(null);
@@ -208,21 +223,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	}, []);
 
 	const isEmptyState = showComposer && messages.length === 0 && !isLoading;
+	const explicitBrandContext = useMemo(() => findBrandContext(activeBrand), [activeBrand]);
+	const activeBrandContext = useMemo(() => explicitBrandContext ?? getBrandContext(activeBrand), [activeBrand, explicitBrandContext]);
+	const activeBrandPrimaryLogo = useMemo(() => getBrandContextPrimaryLogo(activeBrandContext), [activeBrandContext]);
+	const brandContextScore = useMemo(() => (explicitBrandContext ? getBrandContextCompletionScore(explicitBrandContext) : 0), [explicitBrandContext]);
 	const streamingPhase = useMemo<AssistantStreamingPhase>(() => {
 		const hasContentSections = streamingSections.some((section) => section.type !== "plan");
 		return hasContentSections ? "writing" : "reasoning";
 	}, [streamingSections]);
-	const workspaceConnectedIntegrations = useMemo(
-		() =>
-			connectedIntegrations.filter(
-				(integration) => !QUICK_ADD_INTEGRATION_IDS.includes(integration.id as (typeof QUICK_ADD_INTEGRATION_IDS)[number])
-			),
-		[connectedIntegrations]
-	);
-	const connectedChannels = useMemo(() => channels.filter((channel) => channel.is_connected), [channels]);
-	const activeChannel = useMemo(
-		() => connectedChannels.find((channel) => channel.id === activeChannelId) || connectedChannels[0] || null,
-		[activeChannelId, connectedChannels]
+	const selectedIntegrationIdSet = useMemo(
+		() => selectedIntegrationIds ?? (activeIntegrationId ? [activeIntegrationId] : []),
+		[activeIntegrationId, selectedIntegrationIds]
 	);
 
 	useEffect(() => {
@@ -349,6 +360,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		});
 	};
 
+	const isIntegrationSelected = (integration: ResolvedIntegration) =>
+		selectedIntegrationIdSet.includes(integration.id) || (integration.integration ? selectedIntegrationIdSet.includes(integration.integration.id) : false);
+
+	const toggleIntegrationSelection = (integration: ResolvedIntegration) => {
+		if (!onSelectedIntegrationIdsChange) {
+			return;
+		}
+
+		const aliases = new Set([integration.id, integration.integration?.id].filter(Boolean) as string[]);
+		const nextSelection = isIntegrationSelected(integration)
+			? selectedIntegrationIdSet.filter((id) => !aliases.has(id))
+			: [...selectedIntegrationIdSet, integration.id];
+		onSelectedIntegrationIdsChange(nextSelection);
+	};
+
 	const openReportDocument = (section: ReportSection) => {
 		setSelectedDocumentId(getReportDocumentId(section.reportId));
 		setIsDocumentPanelOpen(true);
@@ -403,6 +429,51 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	};
 
 	// Input area component (reusable)
+	const renderHomeSelectionRow = (isCompact = false) => {
+		const selectableIntegrations = connectedIntegrations.filter((integration) => integration.section === "dataSources");
+
+		return (
+			<div className={`home-selection-row ${isCompact ? "compact" : ""}`} aria-label="Home selections">
+				<div className={`home-selection-pills ${isCompact ? "compact" : ""}`}>
+					{onSelectedIntegrationIdsChange &&
+						selectableIntegrations.map((integration) => {
+							const isSelected = isIntegrationSelected(integration);
+							const displayName = integration.connectedAccountName ?? integration.name;
+							return (
+								<button
+									key={integration.id}
+									type="button"
+									className={`home-selection-pill home-account-pill ${isCompact ? "compact" : ""} ${isSelected ? "is-selected" : ""}`}
+									aria-pressed={isSelected}
+									onClick={() => toggleIntegrationSelection(integration)}
+								>
+									<span className="home-selection-pill-logo">{integration.renderLogo(isCompact ? 14 : 16, isCompact ? "bare" : "default")}</span>
+									<span className="home-selection-pill-name">{displayName}</span>
+									{isSelected && !isCompact && <Check size={14} />}
+								</button>
+							);
+						})}
+					<button
+						type="button"
+						className={`home-selection-pill integrations-launch-btn ${isCompact ? "compact" : ""}`}
+						aria-label="Open integrations"
+						title="Open integrations"
+						onClick={onOpenIntegrations}
+					>
+						{isCompact ? (
+							<>
+								<Plus size={12} />
+								<span>Data Source</span>
+							</>
+						) : (
+							<Plus size={16} />
+						)}
+					</button>
+				</div>
+			</div>
+		);
+	};
+
 	const renderInputArea = (isInline: boolean) => (
 		<div className={`chat-input-area ${isInline ? "inline" : "floating"}`}>
 			<div className="chat-input-shell">
@@ -418,7 +489,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 						/>
 					</div>
 				)}
-				<form onSubmit={handleSubmit} className="input-wrapper">
+				<form onSubmit={handleSubmit} className={`input-wrapper ${isInline ? "inline-home-composer" : ""}`}>
+					{isInline && renderHomeSelectionRow(true)}
 					<textarea
 						ref={inputRef}
 						rows={1}
@@ -460,20 +532,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 									</div>
 								)}
 							</div>
+							{isInline && (
+								<button
+									type="button"
+									className={`composer-plus-btn composer-connections-btn ${isMyConnectionsModalOpen ? "is-open" : ""}`}
+									aria-label="Open my connections"
+									onClick={() => {
+										setIsComposerMenuOpen(false);
+										setIsMyConnectionsModalOpen(true);
+									}}
+								>
+									<Plug size={17} />
+								</button>
+							)}
 						</div>
 						<div className="input-toolbar-right">
-							<div className={`composer-channel-pill ${activeChannel ? "" : "is-empty"}`}>
-								{activeChannel ? (
-									<>
-										<span className="composer-channel-pill-icon">
-											<PlatformLogo platform={activeChannel.platform} size={16} />
-										</span>
-										<span className="composer-channel-pill-label">{activeChannel.name}</span>
-									</>
-								) : (
-									<span className="composer-channel-pill-label">No channel selected</span>
-								)}
-							</div>
 							<button type="submit" disabled={isLoading || !input.trim()} className="send-btn">
 								<ArrowUp size={18} color="white" />
 							</button>
@@ -484,36 +557,47 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		</div>
 	);
 
+	const renderHomeBrandContextCard = () => (
+		<div className="home-brand-context-row">
+			<button type="button" className="home-brand-context-card" onClick={onOpenBrandContext}>
+				<div className="home-brand-context-main">
+					<BrandLogoMark
+						markText={activeBrandPrimaryLogo?.markText ?? activeBrand.charAt(0)}
+						imageUrl={activeBrandPrimaryLogo?.imageUrl}
+						size="xs"
+						label={`${activeBrand} logo`}
+					/>
+					<div className="home-brand-context-copy">
+						<strong>{activeBrand}</strong>
+						<span>Brand context score</span>
+					</div>
+				</div>
+				<div className="home-brand-context-ring" style={{ ["--brand-context-progress" as any]: `${brandContextScore}%` }}>
+					<div className="home-brand-context-ring-value" aria-label={`Brand context score ${brandContextScore}`}>
+						<span className="home-brand-context-ring-number">{brandContextScore}</span>
+					</div>
+				</div>
+			</button>
+		</div>
+	);
+
 	return (
 		<div className={`chat-interface ${isDocumentPanelOpen && selectedDocument ? "has-document-panel" : ""}`}>
 			<div className="chat-primary-column">
 				{headerContent && !isEmptyState && <div className="chat-interface-header">{headerContent}</div>}
 				{isEmptyState ? (
 					<div className="empty-state-container" ref={emptyStateRef}>
+						{renderHomeBrandContextCard()}
 						<div className="empty-state-header">
-							<div className="empty-state-title-row">
-								<RayaLogo size={36} variant="color" className="empty-state-brand-icon" />
-								<h2 className="center-brand">Ask Raya</h2>
-							</div>
+						<div className="empty-state-title-row">
+							<RayaLogo size={36} variant="color" className="empty-state-brand-icon" />
+							<h2 className="center-brand">What would you like to do?</h2>
+						</div>
 							<p className="center-brand-subtitle">Trained on insights from 5.4B in ad spend</p>
 						</div>
-						<button type="button" className="integrations-launch-btn" onClick={onOpenIntegrations}>
-							<span>Integrations</span>
-							{workspaceConnectedIntegrations.length > 0 && (
-								<span className="integrations-launch-logos">
-									{workspaceConnectedIntegrations.slice(0, 4).map((integration) => (
-										<span key={integration.id} className="integrations-launch-logo">
-											{integration.renderLogo(24)}
-										</span>
-									))}
-									{workspaceConnectedIntegrations.length > 4 && (
-										<span className="integrations-launch-more">+{workspaceConnectedIntegrations.length - 4}</span>
-									)}
-								</span>
-							)}
-						</button>
-						{/* Inline input for empty state */}
-						{renderInputArea(true)}
+						<div className="home-composer-stack">
+							{renderInputArea(true)}
+						</div>
 						<PromptSuggestions onPromptSelect={handlePromptSelect} />
 						{homeAutomations.length > 0 && onOpenAutomationRun && (
 							<AutomationHighlights
@@ -555,6 +639,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 				)}
 			</div>
 			{isDocumentPanelOpen && selectedDocument && <DocumentPanel document={selectedDocument} onClose={closeDocumentPanel} />}
+			<MyConnectionsModal
+				isOpen={isMyConnectionsModalOpen}
+				connections={myConnections}
+				onClose={() => setIsMyConnectionsModalOpen(false)}
+				onConnectConnection={onConnectMyConnection}
+				onDisconnectConnection={onDisconnectMyConnection}
+			/>
 		</div>
 	);
 };

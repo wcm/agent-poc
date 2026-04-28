@@ -12,24 +12,27 @@ import {
 	getDefaultDeliveryForFrequency,
 } from "../../automations/catalog";
 import { getAutomationMockRunById, getDefaultAutomationMockRun } from "../../automations/mockRuns";
-import { getConnectableChannelId, getIntegrationDefinitionById, IntegrationConnectionState, resolveIntegrations, ResolvedIntegration } from "../../integrations/catalog";
-import { Channel, Message } from "../../types";
+import { getConnectableIntegrationId, getIntegrationDefinitionById, IntegrationState, resolveIntegrations, ResolvedIntegration } from "../../integrations/catalog";
+import { Integration, Message } from "../../types";
 
 interface AutomationsPageProps {
 	automations: AutomationDefinition[];
 	activeAutomationId: string | null;
 	activeAutomationMode: "overview" | "details" | "run";
-	channels: Channel[];
-	activeChannelId: string | null;
+	integrations: Integration[];
+	activeIntegrationId: string | null;
+	activeBrand: string;
 	initialRunId?: string | null;
 	composerPrefill?: string | null;
-	integrationConnectionState: IntegrationConnectionState;
+	integrationState: IntegrationState;
 	onAutomationSelect: (automationId: string | null) => void;
 	onAutomationModeChange: (mode: "overview" | "details" | "run") => void;
 	onSaveAutomation: (automation: AutomationDefinition) => Promise<void> | void;
-	onChannelConnect: (channelId: string) => Promise<void>;
-	onRefreshChannels: () => Promise<void> | void;
+	onIntegrationConnect: (integrationId: string) => Promise<void>;
+	onRefreshIntegrations: () => Promise<void> | void;
 	onConnectIntegration: (integrationId: string) => Promise<void> | void;
+	onDisconnectIntegration: (integrationId: string) => Promise<void> | void;
+	onOpenBrandContext: () => void;
 	onTestAutomation: (prompt: string) => Promise<void> | void;
 	onContinueAutomationRun: (historyMessages: Message[], message: string) => Promise<void> | void;
 }
@@ -51,17 +54,20 @@ const AutomationsPage: React.FC<AutomationsPageProps> = ({
 	automations,
 	activeAutomationId,
 	activeAutomationMode,
-	channels,
-	activeChannelId,
+	integrations,
+	activeIntegrationId,
+	activeBrand,
 	initialRunId = null,
 	composerPrefill = null,
-	integrationConnectionState,
+	integrationState,
 	onAutomationSelect,
 	onAutomationModeChange,
 	onSaveAutomation,
-	onChannelConnect,
-	onRefreshChannels,
+	onIntegrationConnect,
+	onRefreshIntegrations,
 	onConnectIntegration,
+	onDisconnectIntegration,
+	onOpenBrandContext,
 	onTestAutomation,
 	onContinueAutomationRun,
 }) => {
@@ -74,7 +80,7 @@ const AutomationsPage: React.FC<AutomationsPageProps> = ({
 	const [openedRunId, setOpenedRunId] = useState<string | null>(null);
 	const [toastMessage, setToastMessage] = useState("");
 
-	const resolvedIntegrations = useMemo(() => resolveIntegrations(channels, integrationConnectionState), [channels, integrationConnectionState]);
+	const resolvedIntegrations = useMemo(() => resolveIntegrations(integrations, integrationState), [integrations, integrationState]);
 
 	const integrationsById = useMemo(
 		() => new Map(resolvedIntegrations.map((integration) => [integration.id, integration])),
@@ -122,7 +128,7 @@ const AutomationsPage: React.FC<AutomationsPageProps> = ({
 
 				return {
 					...definition,
-					channel: null,
+					integration: null,
 					isConnected: false,
 					status: definition.availability === "available" ? "available" : "coming_soon",
 				};
@@ -220,16 +226,16 @@ const AutomationsPage: React.FC<AutomationsPageProps> = ({
 		setIsConnectingRequired(true);
 		try {
 			for (const integration of activationRequest.missingIntegrations) {
-				const connectableChannelId = getConnectableChannelId(integration);
-				if (connectableChannelId) {
-					await onChannelConnect(connectableChannelId);
+				const connectableIntegrationId = getConnectableIntegrationId(integration);
+				if (connectableIntegrationId) {
+					await onIntegrationConnect(connectableIntegrationId);
 					continue;
 				}
 
 				await onConnectIntegration(integration.id);
 			}
 
-			await onRefreshChannels();
+			await onRefreshIntegrations();
 
 			const updatedAutomation = { ...activationRequest.automation, status: "active" as const };
 			await onSaveAutomation(cloneAutomation(updatedAutomation));
@@ -343,9 +349,13 @@ const AutomationsPage: React.FC<AutomationsPageProps> = ({
 						planStates={new Map()}
 						onSendMessage={(message) => onContinueAutomationRun(openedMockRun.messages, message)}
 						onOpenIntegrations={() => {}}
+						onOpenBrandContext={onOpenBrandContext}
 						connectedIntegrations={resolvedIntegrations.filter((integration) => integration.isConnected)}
-						channels={channels}
-						activeChannelId={activeChannelId}
+						myConnections={resolvedIntegrations.filter((integration) => integration.section === "myConnections")}
+						activeIntegrationId={activeIntegrationId}
+						activeBrand={activeBrand}
+						onConnectMyConnection={onConnectIntegration}
+						onDisconnectMyConnection={onDisconnectIntegration}
 						showComposer={true}
 						prefilledInput={composerPrefill}
 						headerContent={
@@ -618,7 +628,7 @@ const AutomationsPage: React.FC<AutomationsPageProps> = ({
 						<h1>Automations</h1>
 						<p>Automations are shared across the workspace. Configure recurring tasks, delivery schedules, and required integrations here.</p>
 					</div>
-					<label className="integrations-search" aria-label="Search automations">
+					<label className="workspace-search" aria-label="Search automations">
 						<Search size={18} />
 						<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search automations..." />
 					</label>

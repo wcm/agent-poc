@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
-import { Channel } from "../../types";
-import { getConnectableChannelId, getQuickAddIntegrations } from "../../integrations/catalog";
+import { Integration } from "../../types";
+import { getConnectableIntegrationId, getQuickAddIntegrations } from "../../integrations/catalog";
 
-interface ConnectChannelMenuProps {
-	channels: Channel[];
-	onChannelConnect: (channelId: string) => Promise<void>;
-	onRefreshChannels: () => Promise<void> | void;
-	onChannelSelect?: (channelId: string) => void;
+interface ConnectIntegrationMenuProps {
+	integrations: Integration[];
+	onIntegrationConnect: (integrationId: string) => Promise<void>;
+	onRefreshIntegrations: () => Promise<void> | void;
+	onIntegrationSelect?: (integrationId: string) => void;
 	buttonClassName?: string;
 	menuClassName?: string;
 }
@@ -29,18 +29,18 @@ const TikTokMenuIcon = () => (
 	</svg>
 );
 
-const ConnectChannelMenu: React.FC<ConnectChannelMenuProps> = ({
-	channels,
-	onChannelConnect,
-	onRefreshChannels,
-	onChannelSelect,
+const ConnectIntegrationMenu: React.FC<ConnectIntegrationMenuProps> = ({
+	integrations,
+	onIntegrationConnect,
+	onRefreshIntegrations,
+	onIntegrationSelect,
 	buttonClassName = "page-connect-menu-btn",
 	menuClassName = "page-connect-menu-dropdown",
 }) => {
 	const [isOpen, setIsOpen] = useState(false);
 	const [connectingId, setConnectingId] = useState<string | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
-	const quickAddIntegrations = useMemo(() => getQuickAddIntegrations(channels), [channels]);
+	const quickAddIntegrations = useMemo(() => getQuickAddIntegrations(integrations), [integrations]);
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -59,25 +59,25 @@ const ConnectChannelMenu: React.FC<ConnectChannelMenuProps> = ({
 			return;
 		}
 
-		if (integration.isConnected && integration.channel) {
-			onChannelSelect?.(integration.channel.id);
+		if (integration.isConnected && integration.integration) {
+			onIntegrationSelect?.(integration.integration.id);
 			setIsOpen(false);
 			return;
 		}
 
-		const connectableChannelId = getConnectableChannelId(integration);
-		if (!connectableChannelId) {
+		const connectableIntegrationId = getConnectableIntegrationId(integration);
+		if (!connectableIntegrationId) {
 			return;
 		}
 
 		setConnectingId(integration.id);
 		try {
-			await onChannelConnect(connectableChannelId);
-			await onRefreshChannels();
-			onChannelSelect?.(connectableChannelId);
+			await onIntegrationConnect(connectableIntegrationId);
+			await onRefreshIntegrations();
+			onIntegrationSelect?.(connectableIntegrationId);
 			setIsOpen(false);
 		} catch (error) {
-			console.error("Failed to connect channel:", error);
+			console.error("Failed to connect integration:", error);
 		} finally {
 			setConnectingId(null);
 		}
@@ -85,7 +85,7 @@ const ConnectChannelMenu: React.FC<ConnectChannelMenuProps> = ({
 
 	return (
 		<div className="page-connect-menu" ref={containerRef}>
-			<button type="button" className={buttonClassName} aria-label="Add channel account" onClick={() => setIsOpen((prev) => !prev)}>
+			<button type="button" className={buttonClassName} aria-label="Add integration" onClick={() => setIsOpen((prev) => !prev)}>
 				<Plus size={16} />
 			</button>
 			{isOpen && (
@@ -93,7 +93,7 @@ const ConnectChannelMenu: React.FC<ConnectChannelMenuProps> = ({
 						{quickAddIntegrations.map((integration) => (
 							<button key={integration.id} type="button" className="page-connect-menu-item" onClick={() => handleOptionClick(integration.id)} disabled={connectingId === integration.id}>
 								<span className="page-connect-menu-item-icon">{integration.id === "meta_ads" ? <MetaMenuIcon /> : <TikTokMenuIcon />}</span>
-								<span>{integration.name === "Meta Ads" ? "Add Meta Ads Account" : "Add Tiktok Ads Account"}</span>
+								<span>{integration.name === "Meta Ads" ? "Add Meta Ads Integration" : "Add TikTok Ads Integration"}</span>
 							</button>
 						))}
 				</div>
@@ -102,4 +102,4 @@ const ConnectChannelMenu: React.FC<ConnectChannelMenuProps> = ({
 	);
 };
 
-export default ConnectChannelMenu;
+export default ConnectIntegrationMenu;

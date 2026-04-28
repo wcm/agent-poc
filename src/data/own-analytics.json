@@ -1,14 +1,14 @@
 {
-    "channels": [
+    "integrations": [
         {
-            "id": "channel_1",
+            "id": "meta_ads",
             "name": "NIKE Official Meta",
             "platform": "meta",
             "account_id": "act_123456789",
             "is_connected": true
         },
         {
-            "id": "channel_2",
+            "id": "tiktok_ads",
             "name": "NIKE TikTok",
             "platform": "tiktok",
             "account_id": "tiktok_nike_official",
@@ -18,7 +18,7 @@
     "ads": [
         {
             "id": "own_ad_001",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 01 - Video - TOF - Shop Now - Q4",
             "creative_name": "Air Max Hero Video",
             "headline": "Just Do It",
@@ -46,7 +46,7 @@
         },
         {
             "id": "own_ad_002",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 02 - Image - MOF - Learn More - Q4",
             "creative_name": "AF1 Classic White",
             "headline": "Timeless Style",
@@ -73,7 +73,7 @@
         },
         {
             "id": "own_ad_003",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 03 - Video - TOF - Shop Now - Q4",
             "creative_name": "Dunk Low Panda",
             "headline": "Street Ready",
@@ -101,7 +101,7 @@
         },
         {
             "id": "own_ad_004",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 04 - Image - BOF - Buy Now - Q4",
             "creative_name": "React Infinity Performance",
             "headline": "Run Forever",
@@ -128,7 +128,7 @@
         },
         {
             "id": "own_ad_005",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 05 - Video - TOF - Shop Now - Q4",
             "creative_name": "Jordan 1 Chicago",
             "headline": "Legendary Returns",
@@ -156,7 +156,7 @@
         },
         {
             "id": "own_ad_006",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 06 - Image - MOF - Learn More - Q4",
             "creative_name": "Vaporfly Marathon",
             "headline": "Break Records",
@@ -183,7 +183,7 @@
         },
         {
             "id": "own_ad_007",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 07 - Video - MOF - Shop Now - Q4",
             "creative_name": "Nike Pro Training",
             "headline": "Train Harder",
@@ -211,7 +211,7 @@
         },
         {
             "id": "own_ad_008",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 08 - Image - BOF - Explore - Q4",
             "creative_name": "ACG Outdoor Collection",
             "headline": "All Conditions",
@@ -238,7 +238,7 @@
         },
         {
             "id": "own_ad_009",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 09 - Image - TOF - Shop Now - Q4",
             "creative_name": "Blazer Mid Vintage",
             "headline": "Retro Vibes",
@@ -265,7 +265,7 @@
         },
         {
             "id": "own_ad_010",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 10 - Video - MOF - Learn More - Q4",
             "creative_name": "Tech Fleece Winter",
             "headline": "Stay Warm",
@@ -293,7 +293,7 @@
         },
         {
             "id": "own_ad_011",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 11 - Image - BOF - Buy Now - Q4",
             "creative_name": "Pegasus 41 Trainer",
             "headline": "Every Mile Matters",
@@ -320,7 +320,7 @@
         },
         {
             "id": "own_ad_012",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 12 - Video - TOF - Shop Now - Q4",
             "creative_name": "Black Friday Sitewide",
             "headline": "Up to 50% Off",
@@ -348,7 +348,7 @@
         },
         {
             "id": "own_ad_013",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 13 - Image - MOF - Gift Now - Q4",
             "creative_name": "Holiday Gift Guide",
             "headline": "Give the Gift of Sport",
@@ -375,7 +375,7 @@
         },
         {
             "id": "own_ad_014",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 14 - Video - BOF - Create Now - Q4",
             "creative_name": "Nike By You Custom",
             "headline": "Make It Yours",
@@ -403,7 +403,7 @@
         },
         {
             "id": "own_ad_015",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 15 - Image - TOF - Download - Q4",
             "creative_name": "Nike App Promo",
             "headline": "Get the App",
@@ -430,7 +430,7 @@
         },
         {
             "id": "own_ad_016",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 16 - Image - MOF - Learn More - Q4",
             "creative_name": "Jordan 1 Chicago",
             "headline": "Own the Legacy",
@@ -457,7 +457,7 @@
         },
         {
             "id": "own_ad_017",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 17 - Video - BOF - Buy Now - Q4",
             "creative_name": "Air Max Hero Video",
             "headline": "Feel the Air",
@@ -485,7 +485,7 @@
         },
         {
             "id": "own_ad_018",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 18 - Image - TOF - Shop Now - Q4",
             "creative_name": "Dunk Low Fresh",
             "headline": "Legendary Returns",
@@ -512,7 +512,7 @@
         },
         {
             "id": "own_ad_019",
-            "channel_id": "channel_1",
+            "integration_id": "meta_ads",
             "ad_name": "Ad 19 - Video - MOF - Shop Now - Q4",
             "creative_name": "ZoomX Speed",
             "headline": "Break Records",
@@ -540,7 +540,7 @@
         },
         {
             "id": "tiktok_ad_001",
-            "channel_id": "channel_2",
+            "integration_id": "tiktok_ads",
             "ad_name": "TikTok 01 - Video - TOF - Shop Now - Q4",
             "creative_name": "Air Max Hero Video",
             "headline": "Just Do It",
@@ -568,7 +568,7 @@
         },
         {
             "id": "tiktok_ad_002",
-            "channel_id": "channel_2",
+            "integration_id": "tiktok_ads",
             "ad_name": "TikTok 02 - Video - MOF - Learn More - Q4",
             "creative_name": "Dunk Low Panda",
             "headline": "Street Ready",
@@ -596,7 +596,7 @@
         },
         {
             "id": "tiktok_ad_003",
-            "channel_id": "channel_2",
+            "integration_id": "tiktok_ads",
             "ad_name": "TikTok 03 - Video - TOF - Shop Now - Q4",
             "creative_name": "Jordan 1 Chicago",
             "headline": "Legendary Returns",
@@ -624,7 +624,7 @@
         },
         {
             "id": "tiktok_ad_004",
-            "channel_id": "channel_2",
+            "integration_id": "tiktok_ads",
             "ad_name": "TikTok 04 - Video - BOF - Buy Now - Q4",
             "creative_name": "Tech Fleece Winter",
             "headline": "Stay Warm",
@@ -652,7 +652,7 @@
         },
         {
             "id": "tiktok_ad_005",
-            "channel_id": "channel_2",
+            "integration_id": "tiktok_ads",
             "ad_name": "TikTok 05 - Video - TOF - Shop Now - Q4",
             "creative_name": "Air Max Hero Video",
             "headline": "Run Different",
@@ -680,7 +680,7 @@
         },
         {
             "id": "tiktok_ad_006",
-            "channel_id": "channel_2",
+            "integration_id": "tiktok_ads",
             "ad_name": "TikTok 06 - Video - MOF - Learn More - Q4",
             "creative_name": "Jordan 1 Chicago",
             "headline": "Timeless Style",
@@ -708,7 +708,7 @@
         },
         {
             "id": "tiktok_ad_007",
-            "channel_id": "channel_2",
+            "integration_id": "tiktok_ads",
             "ad_name": "TikTok 07 - Video - BOF - Buy Now - Q4",
             "creative_name": "Dunk Low Panda",
             "headline": "Gift Season",
@@ -736,7 +736,7 @@
         },
         {
             "id": "tiktok_ad_008",
-            "channel_id": "channel_2",
+            "integration_id": "tiktok_ads",
             "ad_name": "TikTok 08 - Video - TOF - Shop Now - Q4",
             "creative_name": "TikTok Trend Challenge",
             "headline": "Just Do It",

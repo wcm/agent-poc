@@ -67,7 +67,7 @@ const BrandSelector: React.FC<BrandSelectorProps> = ({ activeBrand, onBrandChang
         {!isCollapsed && (
           <>
             <span className="brand-name">{activeBrand}</span>
-            <ChevronsUpDown size={16} className="brand-chevron" />
+            <ChevronsUpDown size={16} className={`brand-chevron ${isOpen ? 'open' : ''}`} />
           </>
         )}
       </div>

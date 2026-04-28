@@ -1,165 +1,217 @@
 import React from "react";
-import { Channel } from "../types";
-import { TiledServiceLogo } from "../components/icons/ServiceLogos";
+import { Integration } from "../types";
+import { ServiceLogoImage, TiledServiceLogo, ServiceLogoId } from "../components/icons/ServiceLogos";
 
-export type IntegrationSectionId = "recommended" | "comingSoon";
+export type IntegrationSectionId = "dataSources" | "communication" | "myConnections";
 export type IntegrationAvailability = "available" | "coming_soon";
 export type IntegrationStatus = "connected" | "available" | "coming_soon";
-export type IntegrationConnectionState = Record<string, boolean>;
+export type IntegrationState = Record<string, boolean>;
+export type IntegrationLogoVariant = "default" | "bare";
 
 export interface IntegrationDefinition {
 	id: string;
 	name: string;
 	description: string;
+	defaultConnectedAccountName?: string;
 	section: IntegrationSectionId;
 	availability: IntegrationAvailability;
 	defaultConnected?: boolean;
-	backendChannelIds?: string[];
+	backendIntegrationIds?: string[];
 	searchTerms?: string[];
-	renderLogo: (size?: number) => React.ReactNode;
+	renderLogo: (size?: number, variant?: IntegrationLogoVariant) => React.ReactNode;
 }
 
 export interface ResolvedIntegration extends IntegrationDefinition {
-	channel: Channel | null;
+	integration: Integration | null;
+	connectedAccountName: string | null;
 	isConnected: boolean;
 	status: IntegrationStatus;
 }
 
 export const INTEGRATION_SECTIONS: Array<{ id: IntegrationSectionId; label: string }> = [
-	{ id: "recommended", label: "Recommended" },
-	{ id: "comingSoon", label: "Coming Soon" },
+	{ id: "dataSources", label: "Data Sources" },
+	{ id: "communication", label: "Communication" },
+	{ id: "myConnections", label: "My Connections" },
 ];
 
-export const INTEGRATION_STATE_STORAGE_KEY = "raya.integration.connection.state";
+export const INTEGRATIONS_PAGE_SECTIONS = INTEGRATION_SECTIONS.filter((section) => section.id !== "myConnections");
+
+export const INTEGRATION_STATE_STORAGE_KEY = "raya.integration.state";
+
+const createServiceLogoRenderer =
+	(logoId: ServiceLogoId, alt: string) => (size = 24, variant: IntegrationLogoVariant = "default") =>
+		variant === "bare" ? (
+			<ServiceLogoImage logoId={logoId} alt={alt} size={size} />
+		) : (
+			<TiledServiceLogo logoId={logoId} alt={alt} size={size} />
+		);
 
 export const INTEGRATIONS: IntegrationDefinition[] = [
 	{
 		id: "meta_ads",
 		name: "Meta Ads",
-		description: "Access your ad accounts, campaigns, and performance insights.",
-		section: "recommended",
+		description: "Access Meta campaigns and performance insights.",
+		defaultConnectedAccountName: "NIKE Official Meta",
+		section: "dataSources",
 		availability: "available",
-		backendChannelIds: ["channel_1"],
+		backendIntegrationIds: ["meta_ads"],
 		searchTerms: ["meta", "facebook", "instagram", "ads"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="meta" alt="Meta Ads" size={size} />,
+		renderLogo: createServiceLogoRenderer("meta", "Meta Ads"),
 	},
 	{
 		id: "tiktok_ads",
 		name: "TikTok Ads",
-		description: "Access your TikTok ad accounts and campaign performance.",
-		section: "recommended",
+		description: "Access TikTok campaigns and performance insights.",
+		defaultConnectedAccountName: "NIKE TikTok",
+		section: "dataSources",
 		availability: "available",
-		backendChannelIds: ["channel_2"],
+		backendIntegrationIds: ["tiktok_ads"],
 		searchTerms: ["tiktok", "ads", "paid"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="tiktok" alt="TikTok Ads" size={size} />,
+		renderLogo: createServiceLogoRenderer("tiktok", "TikTok Ads"),
 	},
 	{
-		id: "slack",
-		name: "Slack",
-		description: "Send messages to channels and users in your Slack workspace.",
-		section: "recommended",
+		id: "google_ads",
+		name: "Google Ads",
+		description: "Access Google Ads campaigns, search terms, and performance insights.",
+		defaultConnectedAccountName: "NIKE Google Ads US",
+		section: "dataSources",
 		availability: "available",
-		defaultConnected: true,
-		searchTerms: ["slack", "workspace", "messages"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="slack" alt="Slack" size={size} />,
-	},
-	{
-		id: "notion",
-		name: "Notion",
-		description: "Sync pages and databases from your Notion workspace.",
-		section: "recommended",
-		availability: "available",
-		searchTerms: ["notion", "docs", "database", "wiki"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="notion" alt="Notion" size={size} />,
+		searchTerms: ["google ads", "google", "search", "youtube", "paid"],
+		renderLogo: createServiceLogoRenderer("google_ads", "Google Ads"),
 	},
 	{
 		id: "google_analytics",
 		name: "Google Analytics",
 		description: "Access website analytics and audience insights.",
-		section: "recommended",
+		defaultConnectedAccountName: "NIKE GA4 US",
+		section: "dataSources",
 		availability: "available",
 		searchTerms: ["ga4", "analytics", "traffic", "website"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="google_analytics" alt="Google Analytics" size={size} />,
+		renderLogo: createServiceLogoRenderer("google_analytics", "Google Analytics"),
 	},
 	{
 		id: "shopify",
 		name: "Shopify",
 		description: "Connect your Shopify store for sales analytics and product insights.",
-		section: "recommended",
+		defaultConnectedAccountName: "NIKE DTC Store",
+		section: "dataSources",
 		availability: "available",
 		searchTerms: ["shopify", "store", "sales", "commerce"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="shopify" alt="Shopify" size={size} />,
-	},
-	{
-		id: "google_drive",
-		name: "Google Drive",
-		description: "Access briefs, reports, and creative assets from your shared drives.",
-		section: "recommended",
-		availability: "available",
-		searchTerms: ["drive", "google drive", "files", "docs"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="google_drive" alt="Google Drive" size={size} />,
+		renderLogo: createServiceLogoRenderer("shopify", "Shopify"),
 	},
 	{
 		id: "hubspot",
 		name: "HubSpot",
 		description: "Access your HubSpot CRM contacts, deals, and marketing data.",
-		section: "comingSoon",
+		section: "dataSources",
 		availability: "coming_soon",
 		searchTerms: ["hubspot", "crm", "marketing", "sales"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="hubspot" alt="HubSpot" size={size} />,
+		renderLogo: createServiceLogoRenderer("hubspot", "HubSpot"),
 	},
 	{
 		id: "salesforce",
 		name: "Salesforce",
 		description: "Connect your Salesforce data for pipeline and account insights.",
-		section: "comingSoon",
+		section: "dataSources",
 		availability: "coming_soon",
 		searchTerms: ["salesforce", "crm", "pipeline"],
-		renderLogo: (size = 24) => <TiledServiceLogo logoId="salesforce" alt="Salesforce" size={size} />,
+		renderLogo: createServiceLogoRenderer("salesforce", "Salesforce"),
+	},
+	{
+		id: "slack",
+		name: "Use Raya in Slack",
+		description: "Bring Raya into Slack channels and threads for faster collaboration.",
+		defaultConnectedAccountName: "#nike-marketing",
+		section: "communication",
+		availability: "available",
+		searchTerms: ["slack", "communication", "chat", "workspace", "channel"],
+		renderLogo: createServiceLogoRenderer("slack", "Slack"),
+	},
+	{
+		id: "notion",
+		name: "Notion",
+		description: "Let Raya read, create, and update documents in Notion.",
+		defaultConnectedAccountName: "Nike Notion Workspace",
+		section: "myConnections",
+		availability: "available",
+		searchTerms: ["notion", "workspace", "docs", "wiki", "knowledge"],
+		renderLogo: createServiceLogoRenderer("notion", "Notion"),
+	},
+	{
+		id: "google_drive",
+		name: "Google Drive",
+		description: "Let Raya read, create, and update files in Google Drive.",
+		defaultConnectedAccountName: "Nike Shared Drive",
+		section: "myConnections",
+		availability: "available",
+		searchTerms: ["google drive", "drive", "documents", "files"],
+		renderLogo: createServiceLogoRenderer("google_drive", "Google Drive"),
+	},
+	{
+		id: "clickup",
+		name: "ClickUp",
+		description: "Let Raya read, create, and update tasks in ClickUp.",
+		defaultConnectedAccountName: "Nike Creative Ops",
+		section: "myConnections",
+		availability: "available",
+		searchTerms: ["clickup", "tasks", "project management", "workflow"],
+		renderLogo: createServiceLogoRenderer("clickup", "ClickUp"),
+	},
+	{
+		id: "asana",
+		name: "Asana",
+		description: "Let Raya read, create, and update tasks in Asana.",
+		defaultConnectedAccountName: "Nike Campaign Planning",
+		section: "myConnections",
+		availability: "available",
+		searchTerms: ["asana", "tasks", "project management", "workflow"],
+		renderLogo: createServiceLogoRenderer("asana", "Asana"),
 	},
 ];
 
-const matchesChannel = (integration: IntegrationDefinition, channel: Channel) => {
-	if (!channel.is_connected) {
+const matchesIntegration = (definition: IntegrationDefinition, integration: Integration) => {
+	if (!integration.is_connected) {
 		return false;
 	}
 
-	return integration.backendChannelIds?.includes(channel.id) ?? false;
+	return definition.backendIntegrationIds?.includes(integration.id) ?? false;
 };
 
-export const getInitialIntegrationConnectionState = (): IntegrationConnectionState =>
-	INTEGRATIONS.reduce<IntegrationConnectionState>((accumulator, integration) => {
+export const getInitialIntegrationState = (): IntegrationState =>
+	INTEGRATIONS.reduce<IntegrationState>((accumulator, integration) => {
 		if (integration.defaultConnected) {
 			accumulator[integration.id] = true;
 		}
 		return accumulator;
 	}, {});
 
-export const resolveIntegrations = (channels: Channel[], connectionState: IntegrationConnectionState = {}): ResolvedIntegration[] =>
-	INTEGRATIONS.map((integration) => {
-		const channel = channels.find((candidate) => matchesChannel(integration, candidate)) ?? null;
-		const isConnected = channel ? true : Boolean(connectionState[integration.id] ?? integration.defaultConnected ?? false);
-		const status: IntegrationStatus = isConnected ? "connected" : integration.availability === "available" ? "available" : "coming_soon";
+export const resolveIntegrations = (integrations: Integration[], integrationState: IntegrationState = {}): ResolvedIntegration[] =>
+	INTEGRATIONS.map((definition) => {
+		const matchedIntegration = integrations.find((candidate) => matchesIntegration(definition, candidate)) ?? null;
+		const isConnected = matchedIntegration ? true : Boolean(integrationState[definition.id] ?? definition.defaultConnected ?? false);
+		const status: IntegrationStatus = isConnected ? "connected" : definition.availability === "available" ? "available" : "coming_soon";
+		const connectedAccountName = matchedIntegration?.name ?? (isConnected ? definition.defaultConnectedAccountName ?? null : null);
 
 		return {
-			...integration,
-			channel,
+			...definition,
+			integration: matchedIntegration,
+			connectedAccountName,
 			isConnected,
 			status,
 		};
 	});
 
-export const getConnectableChannelId = (integration: IntegrationDefinition | ResolvedIntegration) => integration.backendChannelIds?.[0] ?? null;
+export const getConnectableIntegrationId = (integration: IntegrationDefinition | ResolvedIntegration) => integration.backendIntegrationIds?.[0] ?? null;
 
 export const getIntegrationDefinitionById = (integrationId: string) => INTEGRATIONS.find((integration) => integration.id === integrationId) ?? null;
 
-export const getConnectedIntegrations = (channels: Channel[], connectionState: IntegrationConnectionState = {}) =>
-	resolveIntegrations(channels, connectionState).filter((integration) => integration.isConnected);
+export const getConnectedIntegrations = (integrations: Integration[], integrationState: IntegrationState = {}) =>
+	resolveIntegrations(integrations, integrationState).filter((integration) => integration.isConnected);
 
 export const QUICK_ADD_INTEGRATION_IDS = ["meta_ads", "tiktok_ads"] as const;
 
-export const getQuickAddIntegrations = (channels: Channel[], connectionState: IntegrationConnectionState = {}) =>
-	resolveIntegrations(channels, connectionState).filter((integration) => QUICK_ADD_INTEGRATION_IDS.includes(integration.id as (typeof QUICK_ADD_INTEGRATION_IDS)[number]));
+export const getQuickAddIntegrations = (integrations: Integration[], integrationState: IntegrationState = {}) =>
+	resolveIntegrations(integrations, integrationState).filter((integration) => QUICK_ADD_INTEGRATION_IDS.includes(integration.id as (typeof QUICK_ADD_INTEGRATION_IDS)[number]));
 
 export const filterIntegrations = (integrations: ResolvedIntegration[], query: string) => {
 	const normalized = query.trim().toLowerCase();
@@ -168,7 +220,7 @@ export const filterIntegrations = (integrations: ResolvedIntegration[], query: s
 	}
 
 	return integrations.filter((integration) => {
-		const haystack = [integration.name, integration.description, ...(integration.searchTerms ?? [])].join(" ").toLowerCase();
+		const haystack = [integration.name, integration.description, integration.connectedAccountName ?? "", ...(integration.searchTerms ?? [])].join(" ").toLowerCase();
 		return haystack.includes(normalized);
 	});
 };

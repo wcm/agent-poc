@@ -1,7 +1,7 @@
 /**
- * Channel Info - Analytics channel data
+ * Integration Info - connected integration metadata
  */
-export interface ChannelInfo {
+export interface IntegrationInfo {
     id: string;
     name: string;
     platform: string;
@@ -31,7 +31,7 @@ export interface FrontendIntegrationInfo {
     status: 'connected';
 }
 
-export interface IntegrationInfo {
+export interface WorkspaceIntegrationInfo {
     id: string;
     name: string;
     availability: IntegrationAvailability;
@@ -112,7 +112,7 @@ export interface ReportEvent {
     };
 }
 
-// Integration result event - structured integration response card
+// Data source result event - structured integration response card
 export interface IntegrationResultEvent {
     type: 'integration_result';
     resultId: string;
@@ -241,7 +241,7 @@ export interface SessionContext {
         id: string;
         title: string;
         content: string;
-        channelId: string;
+        integrationId: string;
         timestamp: number;
     }>;
     
@@ -275,7 +275,7 @@ export type StreamEmitter = (event: SSEEvent) => void;
  * Agent Interface - for extensibility
  */
 export interface AgentParams {
-    channelId?: string;
+    integrationId?: string;
     objective: string;
     focusedItems?: FocusedItemCard[];
     context?: SessionContext;
