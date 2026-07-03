@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { BookOpenText, House, User, PanelLeftClose, PanelLeftOpen, Globe, Heart, Bookmark, LayoutDashboard, Clock3, ChevronDown } from "lucide-react";
+import { BookOpenText, House, User, PanelLeftClose, PanelLeftOpen, Globe, Heart, Bookmark, LayoutDashboard, Clock3, ChevronDown, Image as ImageIcon } from "lucide-react";
 import BrandSelector from "./BrandSelector";
 import { AnalyticsDashboardView, Integration, RayaView, Session } from "../../types";
-import { AutomationDefinition } from "../../automations/catalog";
+import { AutomationDefinition, getUniqueAutomations } from "../../automations/catalog";
 import ConnectIntegrationMenu from "../Integrations/ConnectIntegrationMenu";
 import RayaLogo from "../icons/RayaLogo";
 import IntegrationsIcon from "../icons/IntegrationsIcon";
@@ -101,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	onRefreshIntegrations,
 }) => {
 	const orderedSessions = [...sessions].sort((a, b) => (b.lastActivityAt ?? b.createdAt) - (a.lastActivityAt ?? a.createdAt));
-	const activeAutomations = useMemo(() => automations.filter((automation) => automation.status === "active"), [automations]);
+	const activeAutomations = useMemo(() => getUniqueAutomations(automations).filter((automation) => automation.status === "active"), [automations]);
 	const [isActiveAutomationsCollapsed, setIsActiveAutomationsCollapsed] = useState(false);
 
 	const handleNewTaskClick = () => {
@@ -298,7 +298,16 @@ const Sidebar: React.FC<SidebarProps> = ({
 								</div>
 							)}
 
-							{activeTab !== "atria" && activeTab !== "analytics" && activeTab !== "inspirations" && <div className="coming-soon">Nothing here yet.</div>}
+							{activeTab === "files" && (
+								<div className="session-list" style={{ marginTop: "4px" }}>
+									<div className="session-item active">
+										<ImageIcon size={16} />
+										Generated Images
+									</div>
+								</div>
+							)}
+
+							{activeTab !== "atria" && activeTab !== "analytics" && activeTab !== "inspirations" && activeTab !== "files" && <div className="coming-soon">Nothing here yet.</div>}
 						</div>
 					</div>
 				)}

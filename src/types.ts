@@ -65,10 +65,33 @@ export interface PlanTask {
     status: TaskStatus;
 }
 
+export interface RunNextStep {
+    title: string;
+    prompt: string;
+}
+
+export interface RunInsight {
+    emoji: string;
+    title: string;
+    description: string;
+}
+
+export interface RunSummary {
+    imageUrls: string[];
+    insights: RunInsight[];
+    nextSteps: RunNextStep[];
+}
+
 // Text event - natural language explanations
 export interface TextEvent {
     type: 'text';
     content: string;
+}
+
+// Run title event - generated short label for the conversation
+export interface RunTitleEvent {
+    type: 'run_title';
+    title: string;
 }
 
 // Plan event - new plan with tasks
@@ -141,6 +164,12 @@ export interface DoneEvent {
     type: 'done';
 }
 
+// Run summary event - concise homepage TLDR metadata
+export interface RunSummaryEvent {
+    type: 'run_summary';
+    summary: RunSummary;
+}
+
 // Error event
 export interface ErrorEvent {
     type: 'error';
@@ -201,13 +230,15 @@ export interface VideoConceptsEvent {
 
 // Union type of all SSE events
 export type SSEEvent = 
-    | TextEvent 
+    | TextEvent
+    | RunTitleEvent
     | PlanEvent 
     | PlanStatusEvent 
     | ReportEvent 
     | IntegrationResultEvent
     | FocusedItemsEvent 
     | ContextUpdateEvent 
+    | RunSummaryEvent
     | DoneEvent
     | ErrorEvent
     | ImageConceptsEvent

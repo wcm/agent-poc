@@ -343,11 +343,13 @@ const AutomationsPage: React.FC<AutomationsPageProps> = ({
 				<div className="automations-page automation-run-page">
 					<ChatInterface
 						sessionId={`automation-run-${openedMockRun.id}`}
+						sessions={[]}
 						messages={openedMockRun.messages}
 						isLoading={false}
 						streamingSections={[]}
 						planStates={new Map()}
 						onSendMessage={(message) => onContinueAutomationRun(openedMockRun.messages, message)}
+						onSessionSelect={() => {}}
 						onOpenIntegrations={() => {}}
 						onOpenBrandContext={onOpenBrandContext}
 						connectedIntegrations={resolvedIntegrations.filter((integration) => integration.isConnected)}

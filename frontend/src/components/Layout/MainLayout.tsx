@@ -9,6 +9,7 @@ import AnalyticsDashboard from "../Analytics/AnalyticsDashboard";
 import BrandContextPage from "../BrandContext/BrandContextPage";
 import IntegrationsPage from "../Integrations/IntegrationsPage";
 import AutomationsPage from "../Automations/AutomationsPage";
+import FilesPage from "../Files/FilesPage";
 import { AutomationDefinition, AUTOMATION_STATE_STORAGE_KEY, getInitialAutomations, mergePersistedAutomations } from "../../automations/catalog";
 import {
 	getConnectedIntegrations,
@@ -22,6 +23,7 @@ type SeedConversationEntry = Pick<Message, "role" | "content">;
 
 interface SendMessageOptions {
 	forceNewSession?: boolean;
+	stayOnHome?: boolean;
 	seedMessages?: Message[];
 	seedConversationHistory?: SeedConversationEntry[];
 }
@@ -337,6 +339,16 @@ const MainLayout: React.FC = () => {
 			const eventTimestamp = Date.now();
 
 			switch (event.type) {
+				case "run_title": {
+					updateSession(currentSessionId, (session) => ({
+						...session,
+						title: event.title,
+						lastActivityAt: eventTimestamp,
+						isRead: visible ? true : session.isRead,
+					}));
+					break;
+				}
+
 				case "text": {
 					const section: StreamedSection = { type: "text", content: event.content };
 					updateSession(currentSessionId, (session) => ({
@@ -531,6 +543,22 @@ const MainLayout: React.FC = () => {
 					break;
 				}
 
+				case "run_summary": {
+					const nextStepsSection: StreamedSection = {
+						type: "next_steps",
+						steps: event.summary.nextSteps,
+					};
+
+					updateSession(currentSessionId, (session) => ({
+						...session,
+						lastActivityAt: eventTimestamp,
+						summary: event.summary,
+						streamingSections: [...session.streamingSections.filter((section) => section.type !== "next_steps"), nextStepsSection],
+						isRead: visible ? true : session.isRead,
+					}));
+					break;
+				}
+
 				case "done": {
 					updateSession(currentSessionId, (session) => {
 						const finalSections = [...session.streamingSections];
@@ -587,7 +615,8 @@ const MainLayout: React.FC = () => {
 		setActiveAutomationId(null);
 		setActiveAutomationMode("overview");
 		const userMessage: Message = { role: "user", content };
-		let currentSessionId = options?.forceNewSession ? null : activeSessionId;
+		const shouldStayOnHome = Boolean(options?.stayOnHome);
+		let currentSessionId = options?.forceNewSession || shouldStayOnHome ? null : activeSessionId;
 		const existingSession = currentSessionId ? sessions.find((session) => session.id === currentSessionId) : undefined;
 
 		if (!currentSessionId || !existingSession) {
@@ -608,8 +637,13 @@ const MainLayout: React.FC = () => {
 			};
 
 			setSessions((prev) => [...prev, newSession]);
-			activeSessionIdRef.current = currentSessionId;
-			setActiveSessionId(currentSessionId);
+			if (shouldStayOnHome) {
+				activeSessionIdRef.current = null;
+				setActiveSessionId(null);
+			} else {
+				activeSessionIdRef.current = currentSessionId;
+				setActiveSessionId(currentSessionId);
+			}
 		} else {
 			if (existingSession.status === "running") {
 				return;
@@ -622,6 +656,7 @@ const MainLayout: React.FC = () => {
 				status: "running",
 				isRead: true,
 				completedAt: null,
+				summary: undefined,
 				streamingSections: [],
 				planTaskStates: {},
 			}));
@@ -639,7 +674,11 @@ const MainLayout: React.FC = () => {
 		const sessionParam = `&sessionId=${encodeURIComponent(sessionId)}`;
 
 		let contextParam = "";
-		const selectedIntegrationAliases = new Set(selectedIntegrationIds);
+		const effectiveSelectedIntegrationIds =
+			selectedIntegrationIds.length > 0
+				? selectedIntegrationIds
+				: connectedIntegrations.filter((integration) => integration.section === "dataSources").map((integration) => integration.id);
+		const selectedIntegrationAliases = new Set(effectiveSelectedIntegrationIds);
 		const selectedResolvedIntegrations = connectedIntegrations.filter(
 			(integration) => selectedIntegrationAliases.has(integration.id) || (integration.integration ? selectedIntegrationAliases.has(integration.integration.id) : false)
 		);
@@ -701,6 +740,13 @@ const MainLayout: React.FC = () => {
 		};
 	};
 
+	const handleRunHomeTask = async (prompt: string) => {
+		await handleSendMessage(prompt, undefined, {
+			forceNewSession: true,
+			stayOnHome: true,
+		});
+	};
+
 	const handleTestAutomation = async (prompt: string) => {
 		await handleSendMessage(prompt, undefined, { forceNewSession: true });
 	};
@@ -713,22 +759,6 @@ const MainLayout: React.FC = () => {
 		});
 	};
 
-	const handleOpenAutomationRun = (automationId: string, options?: { runId?: string; prefilledInput?: string }) => {
-		setActiveRayaView("automations");
-		setActiveAutomationId(automationId);
-		setActiveAutomationMode("run");
-		setActiveAutomationRunId(options?.runId ?? null);
-		setActiveAutomationComposerPrefill(options?.prefilledInput ?? null);
-	};
-
-	const handleOpenAutomationsOverview = () => {
-		setActiveRayaView("automations");
-		setActiveAutomationId(null);
-		setActiveAutomationMode("overview");
-		setActiveAutomationRunId(null);
-		setActiveAutomationComposerPrefill(null);
-	};
-
 	const activeSession = sessions.find((session) => session.id === activeSessionId);
 	const currentMessages = activeSession ? activeSession.messages : [];
 	const currentStreamingSections = activeSession?.streamingSections || [];
@@ -737,7 +767,6 @@ const MainLayout: React.FC = () => {
 	const resolvedIntegrations = resolveIntegrations(integrations, integrationState);
 	const connectedIntegrations = resolvedIntegrations.filter((integration) => integration.isConnected);
 	const myConnections = resolvedIntegrations.filter((integration) => integration.section === "myConnections");
-	const activeAutomations = automations.filter((automation) => automation.status === "active");
 
 	return (
 		<div className="main-layout">
@@ -807,11 +836,19 @@ const MainLayout: React.FC = () => {
 					) : (
 						<ChatInterface
 							sessionId={activeSessionId}
+							sessions={sessions}
 							messages={currentMessages}
 							isLoading={currentIsLoading}
 							streamingSections={currentStreamingSections}
 							planStates={currentPlanStates}
 							onSendMessage={handleSendMessage}
+							onRunHomeTask={handleRunHomeTask}
+							onSessionSelect={handleSessionSelect}
+							onSetupAutomation={() => {
+								setActiveAutomationId(null);
+								setActiveAutomationMode("overview");
+								setActiveRayaView("automations");
+							}}
 							onOpenIntegrations={() => setActiveRayaView("integrations")}
 							onOpenBrandContext={() => setActiveRayaView("brandContext")}
 							connectedIntegrations={connectedIntegrations}
@@ -822,9 +859,6 @@ const MainLayout: React.FC = () => {
 							onSelectedIntegrationIdsChange={handleSelectedIntegrationIdsChange}
 							onConnectMyConnection={handleIntegrationStateConnect}
 							onDisconnectMyConnection={handleIntegrationStateDisconnect}
-							homeAutomations={activeAutomations}
-							onOpenAutomationRun={handleOpenAutomationRun}
-							onExploreAutomations={handleOpenAutomationsOverview}
 						/>
 					)
 				) : activeTab === "inspirations" ? (
@@ -844,6 +878,8 @@ const MainLayout: React.FC = () => {
 						onIntegrationChange={setActiveIntegrationId}
 						dashboardView={activeAnalyticsView}
 					/>
+				) : activeTab === "files" ? (
+					<FilesPage baseUrl={baseUrl} />
 				) : (
 					<div className="placeholder-content">
 						<h1>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1>

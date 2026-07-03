@@ -4,7 +4,20 @@ import cors from 'cors';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
 import { Agent } from './agent';
-import { UserContext } from './context';
+import { AdData, CreativeReport, UserContext, createEmptyContext, generateId } from './context';
+import { FocusedItemCard, IntegrationInfo, StreamEmitter } from './types';
+import { imageGenerationTool } from './tools/image-generation';
+import {
+    GeneratedImageFileRecord,
+    GeneratedImageRun,
+    GeneratedImageSourceAd,
+    GENERATED_IMAGE_ASSETS_ROUTE,
+    getGeneratedImageAssetsDir,
+    getGeneratedImageManifestPath,
+    persistGeneratedImagePayload,
+    readGeneratedImageManifest,
+    writeGeneratedImageManifest
+} from './generated-image-files';
 import { logger } from './utils/logger';
 
 dotenv.config();
@@ -34,6 +47,8 @@ function getAgent(sessionId: string): Agent {
 // Helper to read/write data
 const DATA_DIR = path.join(process.cwd(), 'src', 'data');
 
+app.use(GENERATED_IMAGE_ASSETS_ROUTE, express.static(getGeneratedImageAssetsDir(DATA_DIR)));
+
 const readJson = async (filename: string) => {
     const data = await fs.promises.readFile(path.join(DATA_DIR, filename), 'utf-8');
     return JSON.parse(data);
@@ -42,6 +57,112 @@ const readJson = async (filename: string) => {
 const writeJson = async (filename: string, data: any) => {
     await fs.promises.writeFile(path.join(DATA_DIR, filename), JSON.stringify(data, null, 4), 'utf-8');
 };
+
+const parseBoundedInt = (value: unknown, fallback: number, min: number, max: number): number => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        return fallback;
+    }
+    return Math.min(max, Math.max(min, Math.floor(parsed)));
+};
+
+const getAdName = (ad: Partial<AdData>): string =>
+    ad.ad_name || ad.group_value || ad.creative_name || ad.headline || 'Untitled ad';
+
+const toGeneratedImageSourceAd = (ad: AdData): GeneratedImageSourceAd => ({
+    id: ad.id,
+    name: getAdName(ad),
+    creativeName: ad.creative_name,
+    headline: ad.headline,
+    adCopy: ad.ad_copy,
+    imageUrl: ad.image_url,
+    integrationId: ad.integration_id,
+    status: ad.status,
+    startDate: (ad as any).start_date,
+    endDate: (ad as any).end_date,
+    metrics: ad.metrics ? { ...ad.metrics } : undefined
+});
+
+const toFocusedItemCard = (ad: AdData): FocusedItemCard => ({
+    id: ad.id,
+    name: getAdName(ad),
+    thumbnail: ad.image_url,
+    type: 'ad',
+    displayFormat: 'image',
+    metrics: {
+        roas: ad.metrics?.roas,
+        spend: ad.metrics?.spend,
+        ctr: ad.metrics?.ctr,
+        impressions: ad.metrics?.impressions,
+        cpc: ad.metrics?.cpc
+    }
+});
+
+const buildBatchCreativeReport = (ad: AdData): CreativeReport => {
+    const metrics = ad.metrics || ({} as AdData['metrics']);
+    const sourceName = getAdName(ad);
+
+    return {
+        id: generateId('batch-creative-report'),
+        focusSetId: 'files-batch-generation',
+        itemId: ad.id,
+        itemName: sourceName,
+        timestamp: Date.now(),
+        content: `### Creative Profile
+
+| Attribute | Tags |
+|-----------|------|
+| **Target Persona** | runners, sneaker buyers, sport lifestyle |
+| **Core Desire** | performance, identity, confidence |
+| **USP** | Nike product design, recognizable style |
+| **Theme** | movement, aspiration, product hero |
+| **Key Message** | ${ad.headline || 'Nike performance story'} |
+| **Emotion** | momentum, confidence, desire |
+| **Visual Hook** | product-led footwear image |
+| **Offer Type** | ${ad.ad_copy?.toLowerCase().includes('limited') ? 'limited stock' : 'shop now'} |
+
+### Source Ad
+- Name: ${sourceName}
+- Creative: ${ad.creative_name || 'Unknown'}
+- Headline: ${ad.headline || 'N/A'}
+- Copy: ${ad.ad_copy || 'N/A'}
+- ROAS: ${metrics.roas ?? 'N/A'}
+- Spend: ${metrics.spend ? `$${metrics.spend.toFixed(0)}` : 'N/A'}
+- CTR: ${metrics.ctr !== undefined ? `${metrics.ctr.toFixed(2)}%` : 'N/A'}
+
+### Recommendations
+- Keep the product unmistakably central while making each variation explore a distinct shopper motivation.
+- Preserve the Nike performance tone, but vary the setting, offer framing, and emotional hook.
+- Create clean square image ads that can work as Meta feed placements.`
+    };
+};
+
+const stripGeneratedImageRecordForClient = (record: GeneratedImageFileRecord): GeneratedImageFileRecord => ({
+    ...record,
+    originalGeneratedImageUrl: record.isLocal ? undefined : record.originalGeneratedImageUrl,
+    generation: {
+        ...record.generation,
+        request: record.generation.request
+            ? {
+                url: record.generation.request.url,
+                model: record.generation.request.model,
+                prompt: record.generation.request.prompt,
+                originalImageUrl: record.generation.request.originalImageUrl,
+                logoUrl: record.generation.request.logoUrl
+            }
+            : undefined,
+        response: undefined,
+        providerImage: undefined
+    }
+});
+
+const getGeneratedImageManifestForClient = (manifest: Awaited<ReturnType<typeof readGeneratedImageManifest>>, includeRaw: boolean) =>
+    includeRaw
+        ? manifest
+        : {
+            ...manifest,
+            images: manifest.images.map(stripGeneratedImageRecordForClient)
+        };
 
 app.get('/api/stream', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -112,6 +233,190 @@ app.post('/api/clear', (req: Request, res: Response) => {
     }
 
     res.json({ message: 'Session not found' });
+});
+
+// --- Generated Files Endpoints ---
+
+app.get('/api/files/generated-image-ads', async (req: Request, res: Response) => {
+    try {
+        const manifest = await readGeneratedImageManifest(DATA_DIR);
+        const includeRaw = req.query.includeRaw === 'true' || req.query.includeRaw === '1';
+        res.json({
+            ...getGeneratedImageManifestForClient(manifest, includeRaw),
+            manifestPath: path.relative(process.cwd(), getGeneratedImageManifestPath(DATA_DIR))
+        });
+    } catch (error: any) {
+        console.error('Error loading generated image ads:', error);
+        res.status(500).json({ error: 'Failed to load generated image ads' });
+    }
+});
+
+app.post('/api/files/generated-image-ads/generate', async (req: Request, res: Response) => {
+    const requestedCount = parseBoundedInt(req.body?.count ?? req.query.count, 12, 1, 24);
+    const conceptsPerSource = parseBoundedInt(req.body?.conceptsPerSource ?? req.query.conceptsPerSource, 4, 1, 6);
+    const integrationId = String(req.body?.integrationId ?? req.query.integrationId ?? 'meta_ads');
+    const includeInactive = Boolean(req.body?.includeInactive ?? req.query.includeInactive);
+    const runId = generateId('image-run');
+    const createdAt = new Date().toISOString();
+    const newRecords: GeneratedImageFileRecord[] = [];
+    const errors: GeneratedImageRun['errors'] = [];
+
+    try {
+        const analytics = await readJson('own-analytics.json');
+        const ownBrands = await readJson('own-brands.json').catch(() => []);
+        const integrations = (analytics.integrations || []) as IntegrationInfo[];
+        const integration = integrations.find((item) => item.id === integrationId) || integrations[0] || {
+            id: integrationId,
+            name: integrationId,
+            platform: 'unknown',
+            account_id: '',
+            is_connected: true
+        };
+
+        const imageAds = ((analytics.ads || []) as AdData[])
+            .filter((ad) => ad.display_format === 'image')
+            .filter((ad) => !integrationId || ad.integration_id === integrationId)
+            .filter((ad) => includeInactive || ad.status === 'active')
+            .sort((a, b) => {
+                const roasDelta = (b.metrics?.roas || 0) - (a.metrics?.roas || 0);
+                if (roasDelta !== 0) return roasDelta;
+                return (b.metrics?.spend || 0) - (a.metrics?.spend || 0);
+            });
+
+        if (imageAds.length === 0) {
+            res.status(400).json({ error: 'No image ads available for generation' });
+            return;
+        }
+
+        const sourceCount = Math.min(imageAds.length, Math.ceil(requestedCount / conceptsPerSource));
+        const selectedAds = imageAds.slice(0, sourceCount);
+        const sourceAds = selectedAds.map(toGeneratedImageSourceAd);
+        const generationContext = createEmptyContext(integration, `Generate ${requestedCount} image ad variations for the Files library`, {
+            brands: ownBrands.map((brand: any) => ({
+                ...brand,
+                is_followed: brand.is_followed ?? true
+            }))
+        });
+        const noopStream: StreamEmitter = () => undefined;
+
+        for (const ad of selectedAds) {
+            const remaining = requestedCount - newRecords.length;
+            if (remaining <= 0) {
+                break;
+            }
+
+            const conceptsForAd = Math.min(conceptsPerSource, remaining);
+            const item = toFocusedItemCard(ad);
+            const report = buildBatchCreativeReport(ad);
+            const sourceAd = toGeneratedImageSourceAd(ad);
+
+            try {
+                const result = await imageGenerationTool.execute(
+                    item,
+                    report,
+                    generationContext,
+                    noopStream,
+                    conceptsForAd,
+                    {
+                        persistImage: async (input) =>
+                            persistGeneratedImagePayload(
+                                DATA_DIR,
+                                `${runId}-${input.item.id}-${input.conceptIndex + 1}`,
+                                input.imageUrl
+                            )
+                    }
+                );
+
+                result.concepts.forEach((concept, conceptIndex) => {
+                    const imageResponse = result.metadata?.imageResponses?.[conceptIndex];
+                    const recordId = generateId('image-file');
+                    newRecords.push({
+                        id: recordId,
+                        runId,
+                        kind: 'image_ad_variation',
+                        status: concept.status === 'done' ? 'done' : 'failed',
+                        createdAt: new Date().toISOString(),
+                        itemId: item.id,
+                        itemName: item.name,
+                        sourceAd,
+                        conceptIndex,
+                        imageUrl: concept.imageDataUrl,
+                        generatedImageUrl: concept.imageDataUrl,
+                        originalGeneratedImageUrl: imageResponse?.originalImageUrl,
+                        localPath: imageResponse?.localPath,
+                        isLocal: imageResponse?.isLocal,
+                        concept,
+                        generation: {
+                            model: imageResponse?.request?.model,
+                            request: imageResponse?.request,
+                            response: imageResponse?.response,
+                            providerImage: imageResponse?.providerImage,
+                            error: imageResponse?.error
+                        }
+                    });
+                });
+            } catch (error: any) {
+                errors.push({
+                    sourceAdId: ad.id,
+                    message: error.message
+                });
+            }
+        }
+
+        const generatedCount = newRecords.filter((record) => record.status === 'done').length;
+        const run: GeneratedImageRun = {
+            id: runId,
+            createdAt,
+            completedAt: new Date().toISOString(),
+            status: generatedCount === 0 ? 'failed' : errors.length > 0 || generatedCount < requestedCount ? 'completed_with_errors' : 'completed',
+            requestedCount,
+            generatedCount,
+            conceptsPerSource,
+            integrationId,
+            selectionStrategy: 'Top active image ads by ROAS, then spend',
+            sourceAds,
+            errors
+        };
+
+        const manifest = await readGeneratedImageManifest(DATA_DIR);
+        const nextManifest = {
+            ...manifest,
+            images: [...newRecords, ...manifest.images],
+            runs: [run, ...manifest.runs]
+        };
+        await writeGeneratedImageManifest(DATA_DIR, nextManifest);
+
+        res.json({
+            run,
+            images: newRecords.map(stripGeneratedImageRecordForClient),
+            manifestPath: path.relative(process.cwd(), getGeneratedImageManifestPath(DATA_DIR))
+        });
+    } catch (error: any) {
+        console.error('Error generating image ad variations:', error);
+        const manifest = await readGeneratedImageManifest(DATA_DIR).catch(() => null);
+        const run: GeneratedImageRun = {
+            id: runId,
+            createdAt,
+            completedAt: new Date().toISOString(),
+            status: 'failed',
+            requestedCount,
+            generatedCount: 0,
+            conceptsPerSource,
+            integrationId,
+            selectionStrategy: 'Top active image ads by ROAS, then spend',
+            sourceAds: [],
+            errors: [{ message: error.message }]
+        };
+
+        if (manifest) {
+            await writeGeneratedImageManifest(DATA_DIR, {
+                ...manifest,
+                runs: [run, ...manifest.runs]
+            }).catch(() => undefined);
+        }
+
+        res.status(500).json({ error: 'Failed to generate image ad variations', run });
+    }
 });
 
 // --- Brand & Discovery Data Endpoints ---

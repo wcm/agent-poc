@@ -28,6 +28,7 @@ import { consolidateFindingsTool } from './tools/consolidate-findings';
 import { generateAdVariationsTool } from './tools/generate-ad-variations';
 import { integrationsTool } from './tools/integrations';
 import { narratorTool } from './tools/narrator';
+import { runMetadataTool } from './tools/run-metadata';
 import { logger } from './utils/logger';
 
 /**
@@ -138,6 +139,9 @@ export class Agent extends EventEmitter {
                 }
             }
 
+            const runTitle = await runMetadataTool.generateTitle(userInput);
+            this.stream({ type: 'run_title', title: runTitle });
+
             // Step 1: Guardrail check
             this.stream({ type: 'text', content: 'Analyzing your request...' });
             
@@ -148,6 +152,7 @@ export class Agent extends EventEmitter {
                 this.stream({ type: 'text', content: guardrailResult.directResponse || guardrailResult.reason || 'Request could not be processed.' });
                 addToHistory(this.context, 'user', userInput);
                 addToHistory(this.context, 'assistant', guardrailResult.directResponse || guardrailResult.reason || '');
+                await this.emitRunSummary(userInput);
                 this.stream({ type: 'done' });
                 return;
             }
@@ -159,6 +164,7 @@ export class Agent extends EventEmitter {
                 this.stream({ type: 'text', content: response });
                 addToHistory(this.context, 'user', userInput);
                 addToHistory(this.context, 'assistant', response);
+                await this.emitRunSummary(userInput);
                 this.stream({ type: 'done' });
                 return;
             }
@@ -282,6 +288,8 @@ export class Agent extends EventEmitter {
             addToHistory(this.context, 'user', userInput);
             addToHistory(this.context, 'assistant', finalMessage || `Completed analysis: ${plan.objective}`);
 
+            await this.emitRunSummary(userInput);
+
             // Signal completion
             this.stream({ type: 'done' });
 
@@ -289,8 +297,14 @@ export class Agent extends EventEmitter {
             logger.log('ERROR', { component: 'Agent', action: 'REQUEST' }, error.message);
             this.stream({ type: 'error', message: error.message });
             this.stream({ type: 'text', content: `Something went wrong: ${error.message}` });
+            await this.emitRunSummary(userInput);
             this.stream({ type: 'done' });
         }
+    }
+
+    private async emitRunSummary(userInput: string): Promise<void> {
+        const summary = await runMetadataTool.generateSummary(userInput, this.context);
+        this.stream({ type: 'run_summary', summary });
     }
 
     /**

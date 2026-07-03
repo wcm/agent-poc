@@ -1,4 +1,5 @@
 import React from "react";
+import { ArrowUpRight } from "lucide-react";
 import { ImageConcept, StreamedSection, PlanTask, VideoConcept } from "../../types";
 import TextSection from "./TextSection";
 import ReportCard from "./ReportCard";
@@ -14,6 +15,7 @@ interface StreamingMessageProps {
 	onOpenReport?: (section: Extract<StreamedSection, { type: "report" }>) => void;
 	onOpenImageConcept?: (itemId: string, itemName: string, concept: ImageConcept, index: number) => void;
 	onOpenVideoConcept?: (itemId: string, itemName: string, concept: VideoConcept, index: number) => void;
+	onRunNextStep?: (prompt: string) => void;
 }
 
 /**
@@ -26,7 +28,8 @@ const renderSection = (
 	activeDocumentId?: string | null,
 	onOpenReport?: (section: Extract<StreamedSection, { type: "report" }>) => void,
 	onOpenImageConcept?: (itemId: string, itemName: string, concept: ImageConcept, index: number) => void,
-	onOpenVideoConcept?: (itemId: string, itemName: string, concept: VideoConcept, index: number) => void
+	onOpenVideoConcept?: (itemId: string, itemName: string, concept: VideoConcept, index: number) => void,
+	onRunNextStep?: (prompt: string) => void
 ) => {
 	switch (section.type) {
 		case "text":
@@ -88,12 +91,33 @@ const renderSection = (
 				/>
 			);
 
+		case "next_steps":
+			return (
+				<div key={`next-steps-${index}`} className="conversation-next-steps">
+					<div className="conversation-next-steps-header">Next steps</div>
+					<div className="conversation-next-steps-list">
+						{section.steps.map((step) => (
+							<button key={`${step.title}-${step.prompt}`} type="button" className="conversation-next-step" onClick={() => onRunNextStep?.(step.prompt)}>
+								<span className="conversation-next-step-copy">
+									<strong>{step.title}</strong>
+									<span>{step.prompt}</span>
+								</span>
+								<span className="conversation-next-step-run">
+									Run
+									<ArrowUpRight size={14} />
+								</span>
+							</button>
+						))}
+					</div>
+				</div>
+			);
+
 		default:
 			return null;
 	}
 };
 
-const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept }) => {
+const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept, onRunNextStep }) => {
 	if (sections.length === 0) {
 		return null;
 	}
@@ -102,7 +126,9 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planState
 
 	return (
 		<div className="response-with-plan">
-			{contentSections.map((section, index) => renderSection(section, index, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept))}
+			{contentSections.map((section, index) =>
+				renderSection(section, index, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept, onRunNextStep)
+			)}
 		</div>
 	);
 };

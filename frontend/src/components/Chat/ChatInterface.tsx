@@ -1,28 +1,31 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, useLayoutEffect } from "react";
-import { ArrowUp, Sparkles, LucideIcon, Plus, ImageIcon, FileText, Heart, Check, Plug } from "lucide-react";
-import { Message, StreamedSection, PlanTask, ImageConcept, VideoConcept } from "../../types";
+import { ArrowUp, ArrowUpRight, Sparkles, LucideIcon, Plus, ImageIcon, FileText, Heart, Check, Plug, ChevronLeft, ChevronRight, Search, Rocket, ClipboardCheck, Gauge, Clock, Paperclip } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Message, StreamedSection, PlanTask, ImageConcept, VideoConcept, Session, RunSummary } from "../../types";
 import StreamingMessage from "./StreamingMessage";
 import { MessageContent } from "../../MessageContent";
 import PlanTimeline from "./PlanTimeline";
 import DocumentPanel, { ChatDocument } from "./DocumentPanel";
 import AssistantStreamingIndicator, { AssistantStreamingPhase } from "./AssistantStreamingIndicator";
 import { ResolvedIntegration } from "../../integrations/catalog";
-import PromptSuggestions from "./PromptSuggestions";
-import { PromptLibraryItem } from "./promptLibrary";
-import RayaLogo from "../icons/RayaLogo";
-import { AutomationDefinition } from "../../automations/catalog";
-import AutomationHighlights from "./AutomationHighlights";
 import { findBrandContext, getBrandContext, getBrandContextCompletionScore, getBrandContextPrimaryLogo } from "../../brandContext/catalog";
 import BrandLogoMark from "../BrandContext/BrandLogoMark";
 import MyConnectionsModal from "./MyConnectionsModal";
+import { RECOMMENDED_HOME_TASKS, RecommendedTaskIcon } from "../../home/recommendedTasks";
+import rayaThinkingGif from "../../assets/raya-thinking.gif";
 
 interface ChatInterfaceProps {
 	sessionId: string | null;
+	sessions: Session[];
 	messages: Message[];
 	isLoading: boolean;
 	streamingSections: StreamedSection[];
 	planStates: Map<string, PlanTask[]>;
 	onSendMessage: (message: string) => void;
+	onRunHomeTask?: (message: string) => void;
+	onSessionSelect: (sessionId: string) => void;
+	onSetupAutomation?: () => void;
 	onOpenIntegrations: () => void;
 	onOpenBrandContext: () => void;
 	connectedIntegrations: ResolvedIntegration[];
@@ -36,9 +39,6 @@ interface ChatInterfaceProps {
 	showComposer?: boolean;
 	headerContent?: React.ReactNode;
 	prefilledInput?: string | null;
-	homeAutomations?: AutomationDefinition[];
-	onOpenAutomationRun?: (automationId: string, options?: { runId?: string; prefilledInput?: string }) => void;
-	onExploreAutomations?: () => void;
 }
 
 type PlanSection = Extract<StreamedSection, { type: "plan" }>;
@@ -50,12 +50,45 @@ const getImageDocumentId = (itemId: string, index: number) => `image:${itemId}:$
 
 const getVideoDocumentId = (itemId: string, index: number) => `video:${itemId}:${index}`;
 
+const getArtifactReportKind = (reportType: ReportSection["reportType"]) => {
+	switch (reportType) {
+		case "performance":
+			return "Performance report";
+		case "creative":
+			return "Creative report";
+		case "common":
+			return "Final report";
+		default:
+			return "Report";
+	}
+};
+
 const COMPOSER_OVERLAY_ITEMS: Array<{ id: string; label: string; icon: LucideIcon }> = [
 	{ id: "assets", label: "Assets", icon: ImageIcon },
 	{ id: "ads", label: "Ads", icon: Sparkles },
 	{ id: "reports", label: "Reports", icon: FileText },
 	{ id: "following-brand", label: "Following Brand", icon: Heart },
 ];
+
+const RECOMMENDED_TASK_ICONS: Record<RecommendedTaskIcon, LucideIcon> = {
+	competitors: Search,
+	launch: Rocket,
+	audit: ClipboardCheck,
+	fatigue: Gauge,
+};
+
+const formatTaskTimestamp = (value: number | null) => {
+	if (!value) {
+		return "Running now";
+	}
+
+	return new Intl.DateTimeFormat(undefined, {
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	}).format(new Date(value));
+};
 
 const getLatestPlanSection = (messages: Message[]): PlanSection | null => {
 	for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
@@ -153,11 +186,15 @@ const getLatestDocumentCandidates = (messages: Message[], streamingSections: Str
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	sessionId,
+	sessions,
 	messages,
 	isLoading,
 	streamingSections,
 	planStates,
 	onSendMessage,
+	onRunHomeTask,
+	onSessionSelect,
+	onSetupAutomation,
 	onOpenIntegrations,
 	onOpenBrandContext,
 	connectedIntegrations,
@@ -171,9 +208,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	showComposer = true,
 	headerContent,
 	prefilledInput,
-	homeAutomations = [],
-	onOpenAutomationRun,
-	onExploreAutomations,
 }) => {
 	const [input, setInput] = useState("");
 	const [isProgressCollapsed, setIsProgressCollapsed] = useState(true);
@@ -181,9 +215,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	const [isDocumentPanelOpen, setIsDocumentPanelOpen] = useState(false);
 	const [isComposerMenuOpen, setIsComposerMenuOpen] = useState(false);
 	const [isMyConnectionsModalOpen, setIsMyConnectionsModalOpen] = useState(false);
+	const [currentRunningIndex, setCurrentRunningIndex] = useState(0);
 	const chatMessagesAreaRef = useRef<HTMLDivElement>(null);
 	const initialScrollSessionRef = useRef<string | null>(null);
 	const composerMenuRef = useRef<HTMLDivElement>(null);
+	const taskCarouselRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
 	const resizeComposer = useCallback(() => {
@@ -235,6 +271,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		() => selectedIntegrationIds ?? (activeIntegrationId ? [activeIntegrationId] : []),
 		[activeIntegrationId, selectedIntegrationIds]
 	);
+	const runningHomeSessions = useMemo(
+		() => sessions.filter((session) => session.status === "running").sort((left, right) => right.lastActivityAt - left.lastActivityAt),
+		[sessions]
+	);
+	const completedHomeSessions = useMemo(
+		() =>
+			sessions
+				.filter((session) => session.status === "completed" && session.summary)
+				.sort((left, right) => (right.completedAt ?? right.lastActivityAt) - (left.completedAt ?? left.lastActivityAt)),
+		[sessions]
+	);
+
+	useEffect(() => {
+		setCurrentRunningIndex((currentIndex) => {
+			if (runningHomeSessions.length === 0) {
+				return 0;
+			}
+
+			return Math.min(currentIndex, runningHomeSessions.length - 1);
+		});
+	}, [runningHomeSessions.length]);
 
 	useEffect(() => {
 		if (!isEmptyState) {
@@ -333,31 +390,36 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, []);
 
+	const submitComposerMessage = (sendMessage: (message: string) => void) => {
+		const trimmedInput = input.trim();
+		if (!trimmedInput || isLoading) return;
+		sendMessage(trimmedInput);
+		setInput("");
+		setIsComposerMenuOpen(false);
+	};
+
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!input.trim() || isLoading) return;
-		onSendMessage(input);
-		setInput("");
+		submitComposerMessage(onSendMessage);
+	};
+
+	const handleHomeFixedSubmit = (e: React.FormEvent) => {
+		e.preventDefault();
+		submitComposerMessage(onRunHomeTask ?? onSendMessage);
 	};
 
 	const handleComposerKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
-			if (!input.trim() || isLoading) {
-				return;
-			}
-
-			onSendMessage(input);
-			setInput("");
+			submitComposerMessage(onSendMessage);
 		}
 	};
 
-	const handlePromptSelect = (item: PromptLibraryItem) => {
-		setInput(item.prompt);
-		window.requestAnimationFrame(() => {
-			resizeComposer();
-			inputRef.current?.focus();
-		});
+	const handleHomeFixedComposerKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (event.key === "Enter" && !event.shiftKey) {
+			event.preventDefault();
+			submitComposerMessage(onRunHomeTask ?? onSendMessage);
+		}
 	};
 
 	const isIntegrationSelected = (integration: ResolvedIntegration) =>
@@ -395,6 +457,358 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		setIsDocumentPanelOpen(false);
 	};
 
+	const scrollRecommendedTasks = (direction: "left" | "right") => {
+		const node = taskCarouselRef.current;
+		if (!node) {
+			return;
+		}
+
+		node.scrollBy({
+			left: direction === "left" ? -node.clientWidth * 0.82 : node.clientWidth * 0.82,
+			behavior: "smooth",
+		});
+	};
+
+	const paginateRunningTasks = (direction: "left" | "right") => {
+		if (runningHomeSessions.length <= 1) {
+			return;
+		}
+
+		setCurrentRunningIndex((currentIndex) => {
+			const delta = direction === "left" ? -1 : 1;
+			return (currentIndex + delta + runningHomeSessions.length) % runningHomeSessions.length;
+		});
+	};
+
+	const renderSummaryImages = (summary: RunSummary) => {
+		if (summary.imageUrls.length === 0) {
+			return null;
+		}
+		const visibleImageUrls = summary.imageUrls.slice(0, 8);
+		const hiddenImageCount = Math.max(0, summary.imageUrls.length - visibleImageUrls.length);
+
+		return (
+			<div className="home-insight-images">
+				{visibleImageUrls.map((imageUrl, index) => (
+					<div key={`${imageUrl}-${index}`} className="home-insight-image-thumb">
+						<img src={imageUrl} alt="" loading="lazy" />
+						{hiddenImageCount > 0 && index === visibleImageUrls.length - 1 && <span className="home-insight-image-more">+{hiddenImageCount}</span>}
+					</div>
+				))}
+			</div>
+		);
+	};
+
+	const getDisplayInsight = (insight: RunSummary["insights"][number] | string, index: number) => {
+		const fallbackEmojis = ["💡", "📈", "🎯", "⚡"];
+		if (typeof insight === "string") {
+			const title = insight
+				.replace(/\*\*/g, "")
+				.replace(/[`*_~#>-]/g, "")
+				.trim()
+				.split(/\s+/)
+				.slice(0, 10)
+				.join(" ");
+			return {
+				emoji: fallbackEmojis[index % fallbackEmojis.length],
+				title: title || "Key Signal",
+				description: insight.replace(/\*\*/g, ""),
+			};
+		}
+
+		const description = (insight.description || "").replace(/\*\*/g, "");
+		return {
+			emoji: insight.emoji || fallbackEmojis[index % fallbackEmojis.length],
+			title: insight.title || "Key Signal",
+			description,
+		};
+	};
+
+	const getSessionSections = (session: Session) => {
+		const sections: StreamedSection[] = [];
+		session.messages.forEach((message) => {
+			if (message.sections) {
+				sections.push(...message.sections);
+			}
+		});
+		sections.push(...session.streamingSections);
+		return sections;
+	};
+
+	const getGeneratedDocuments = (session: Session) => {
+		const documents: Array<{ id: string; title: string; kind: string }> = [];
+		const seen = new Set<string>();
+		const addDocument = (document: { id: string; title: string; kind: string }) => {
+			if (seen.has(document.id)) {
+				return;
+			}
+			seen.add(document.id);
+			documents.push(document);
+		};
+
+		[...getSessionSections(session)].reverse().forEach((section) => {
+			switch (section.type) {
+				case "report":
+					addDocument({
+						id: `report:${section.reportId}`,
+						title: section.title,
+						kind: getArtifactReportKind(section.reportType),
+					});
+					break;
+				case "image_concepts":
+					addDocument({
+						id: `image:${section.itemId}`,
+						title: `Image concepts for ${section.itemName}`,
+						kind: "Creative document",
+					});
+					break;
+				case "video_concepts":
+					addDocument({
+						id: `video:${section.itemId}`,
+						title: `Video scripts for ${section.itemName}`,
+						kind: "Creative document",
+					});
+					break;
+				default:
+					break;
+			}
+		});
+
+		return documents;
+	};
+
+	const renderGeneratedDocuments = (generatedDocuments: Array<{ id: string; title: string; kind: string }>) => {
+		if (generatedDocuments.length === 0) {
+			return null;
+		}
+
+		const visibleDocuments = generatedDocuments.slice(0, 3);
+		const hiddenCount = generatedDocuments.length - visibleDocuments.length;
+
+		return (
+			<div className="home-generated-documents">
+				<div className="home-generated-documents-list">
+					{visibleDocuments.map((document) => (
+						<div key={document.id} className="home-generated-document">
+							<span className="home-generated-document-icon">
+								<FileText size={14} />
+							</span>
+							<span className="home-generated-document-copy">
+								<strong>{document.title}</strong>
+								<span>{document.kind}</span>
+							</span>
+						</div>
+					))}
+					{hiddenCount > 0 && <div className="home-generated-document-more">+{hiddenCount} more</div>}
+				</div>
+			</div>
+		);
+	};
+
+	const renderSummaryArtifacts = (summary: RunSummary, generatedDocuments: Array<{ id: string; title: string; kind: string }>) => {
+		if (summary.imageUrls.length === 0 && generatedDocuments.length === 0) {
+			return null;
+		}
+
+		return (
+			<div className="home-summary-artifacts">
+				<div className="home-summary-column-title">Artifacts</div>
+				{renderSummaryImages(summary)}
+				{renderGeneratedDocuments(generatedDocuments)}
+			</div>
+		);
+	};
+
+	const getRunningSessionPlan = (session: Session) => {
+		for (let index = session.streamingSections.length - 1; index >= 0; index -= 1) {
+			const section = session.streamingSections[index];
+			if (section.type === "plan") {
+				return {
+					...section,
+					tasks: session.planTaskStates[section.planId] ?? section.tasks,
+				};
+			}
+		}
+
+		return null;
+	};
+
+	const getRunningSessionActivity = (session: Session) => {
+		for (let index = session.streamingSections.length - 1; index >= 0; index -= 1) {
+			const section = session.streamingSections[index];
+			switch (section.type) {
+				case "text":
+					return section.content.replace(/\s+/g, " ").trim();
+				case "report":
+					return `Drafted ${section.title}`;
+				case "focused_items":
+					return `Selected ${section.items.length} focus items for deeper analysis`;
+				case "image_concepts":
+					return `Generating image concepts for ${section.itemName}`;
+				case "video_concepts":
+					return `Drafting video concepts for ${section.itemName}`;
+				case "integration_result":
+					return section.title;
+				default:
+					break;
+			}
+		}
+
+		return "Planning the work and gathering context";
+	};
+
+	const getRunningSessionFeed = (session: Session) => {
+		const feedItems: Array<{ id: string; label: string; text: string }> = [];
+
+		session.streamingSections.forEach((section, index) => {
+			switch (section.type) {
+				case "text": {
+					const text = section.content.replace(/\s+/g, " ").trim();
+					if (text) {
+						feedItems.push({ id: `text-${index}`, label: "Update", text });
+					}
+					break;
+				}
+				case "report":
+					feedItems.push({ id: `report-${section.reportId}`, label: "Document", text: `Drafted ${section.title}` });
+					break;
+				case "focused_items":
+					feedItems.push({ id: `focus-${index}`, label: "Selection", text: `Selected ${section.items.length} items for deeper analysis` });
+					break;
+				case "image_concepts":
+					feedItems.push({ id: `images-${section.itemId}`, label: "Creative", text: `Prepared image concepts for ${section.itemName}` });
+					break;
+				case "video_concepts":
+					feedItems.push({ id: `videos-${section.itemId}`, label: "Creative", text: `Prepared video scripts for ${section.itemName}` });
+					break;
+				case "integration_result":
+					feedItems.push({ id: `integration-${section.resultId}`, label: "Source", text: section.title });
+					break;
+				default:
+					break;
+			}
+		});
+
+		return feedItems.slice(-4);
+	};
+
+	const getRunningSessionImages = (session: Session) => {
+		const urls: string[] = [];
+		const pushUrl = (value?: string) => {
+			if (value && !urls.includes(value)) {
+				urls.push(value);
+			}
+		};
+
+		session.streamingSections.forEach((section) => {
+			switch (section.type) {
+				case "report":
+					pushUrl(section.itemData?.thumbnail);
+					break;
+				case "focused_items":
+					section.items.forEach((item) => pushUrl(item.thumbnail));
+					break;
+				case "image_concepts":
+					section.concepts.forEach((concept) => pushUrl(concept.imageDataUrl));
+					break;
+				default:
+					break;
+			}
+		});
+
+		return urls.slice(0, 6);
+	};
+
+	const renderRunningImages = (imageUrls: string[]) => {
+		if (imageUrls.length === 0) {
+			return null;
+		}
+
+		return (
+			<div className="home-running-message-images" aria-label="Current creative previews">
+				{imageUrls.slice(0, 4).map((imageUrl, index) => (
+					<img key={`${imageUrl}-${index}`} className="home-running-thumbnail" src={imageUrl} alt="" loading="lazy" />
+				))}
+			</div>
+		);
+	};
+
+	const renderHomeCardActions = (sessionId: string, options: { showSetupAutomation?: boolean } = {}) => {
+		const showSetupAutomation = options.showSetupAutomation ?? true;
+
+		return (
+		<div className="home-insight-card-actions">
+			{showSetupAutomation && onSetupAutomation && (
+				<button type="button" className="home-automation-setup-btn" onClick={onSetupAutomation}>
+					<Clock size={15} />
+					<span>Setup Automation</span>
+				</button>
+			)}
+			<button type="button" className="home-insight-view-btn" onClick={() => onSessionSelect(sessionId)}>
+				View Details
+			</button>
+		</div>
+		);
+	};
+
+	const renderRunningSessionCard = (session: Session) => {
+		const plan = getRunningSessionPlan(session);
+		const tasks = plan?.tasks ?? [];
+		const completedCount = tasks.filter((task) => task.status === "completed").length;
+		const progressPercent = tasks.length > 0 ? Math.max(8, Math.round((completedCount / tasks.length) * 100)) : 8;
+		const activeTask = tasks.find((task) => task.status === "running") ?? tasks.find((task) => task.status === "pending") ?? tasks[tasks.length - 1];
+		const activity = getRunningSessionActivity(session);
+		const imageUrls = getRunningSessionImages(session);
+		const feedItems = getRunningSessionFeed(session);
+		const activeTaskNumber = activeTask ? tasks.findIndex((task) => task.id === activeTask.id) + 1 : 0;
+		const activeToolName = activeTask?.tool.replace(/([A-Z])/g, " $1").replace(/^./, (value) => value.toUpperCase()) ?? "Planning";
+
+		return (
+			<article key={session.id} className="home-insight-card is-running">
+				<div className="home-insight-card-header">
+					<div>
+						<h3>{session.title}</h3>
+					</div>
+					{renderHomeCardActions(session.id, { showSetupAutomation: false })}
+				</div>
+
+				<div className="home-running-progress-shell" aria-label={`${completedCount} of ${tasks.length || 1} steps complete`}>
+					<div className="home-running-progress-fill" style={{ width: `${progressPercent}%` }} />
+				</div>
+
+				<div className={`home-running-current-step ${activeTask?.status ?? "running"}`}>
+					<span className="home-running-live-dot" />
+					<span className="home-running-current-step-copy">
+						<strong>
+							{activeTaskNumber > 0 ? `Step ${activeTaskNumber} of ${tasks.length}` : "Current step"} · {activeToolName}
+						</strong>
+						<span>{activeTask?.description ?? activity}</span>
+					</span>
+				</div>
+
+				<div className="home-running-feed" aria-label="Live task messages">
+					<div key={session.lastActivityAt} className="home-running-feed-list">
+						{feedItems.length > 0 ? (
+							feedItems.map((item) => (
+								<div key={item.id} className="home-running-feed-item">
+									<span>{item.label}</span>
+									<p>{item.text}</p>
+								</div>
+							))
+						) : (
+							<div className="home-running-feed-item">
+								<span>Update</span>
+								<p>{activity}</p>
+							</div>
+						)}
+					</div>
+				</div>
+
+				{renderRunningImages(imageUrls)}
+			</article>
+		);
+	};
+
 	const renderMessage = (msg: Message, index: number) => {
 		if (msg.role === "user") {
 			return (
@@ -415,6 +829,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 						onOpenReport={openReportDocument}
 						onOpenImageConcept={openImageConceptDocument}
 						onOpenVideoConcept={openVideoConceptDocument}
+						onRunNextStep={onSendMessage}
 					/>
 				</div>
 			);
@@ -474,6 +889,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		);
 	};
 
+	const renderComposerDropdown = () =>
+		isComposerMenuOpen && (
+			<div className="composer-overlay-dropdown">
+				{COMPOSER_OVERLAY_ITEMS.map((item) => {
+					const Icon = item.icon;
+					return (
+						<button key={item.id} type="button" className="composer-overlay-item" onClick={() => setIsComposerMenuOpen(false)}>
+							<span className="composer-overlay-item-icon">
+								<Icon size={16} />
+							</span>
+							<span>{item.label}</span>
+						</button>
+					);
+				})}
+			</div>
+		);
+
 	const renderInputArea = (isInline: boolean) => (
 		<div className={`chat-input-area ${isInline ? "inline" : "floating"}`}>
 			<div className="chat-input-shell">
@@ -511,26 +943,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 								>
 									<Plus size={18} />
 								</button>
-								{isComposerMenuOpen && (
-									<div className="composer-overlay-dropdown">
-										{COMPOSER_OVERLAY_ITEMS.map((item) => {
-											const Icon = item.icon;
-											return (
-												<button
-													key={item.id}
-													type="button"
-													className="composer-overlay-item"
-													onClick={() => setIsComposerMenuOpen(false)}
-												>
-													<span className="composer-overlay-item-icon">
-														<Icon size={16} />
-													</span>
-													<span>{item.label}</span>
-												</button>
-											);
-										})}
-									</div>
-								)}
+								{renderComposerDropdown()}
 							</div>
 							{isInline && (
 								<button
@@ -557,6 +970,37 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		</div>
 	);
 
+	const renderHomeFixedComposer = () => (
+		<div className="home-fixed-composer-area">
+			<form className="home-fixed-composer" onSubmit={handleHomeFixedSubmit}>
+				<div className="composer-overlay-menu home-fixed-attachment-menu" ref={composerMenuRef}>
+					<button
+						type="button"
+						className={`home-fixed-attachment-btn ${isComposerMenuOpen ? "is-open" : ""}`}
+						aria-label="Attach files"
+						title="Attach files"
+						onClick={() => setIsComposerMenuOpen((prev) => !prev)}
+					>
+						<Paperclip size={18} />
+					</button>
+					{renderComposerDropdown()}
+				</div>
+				<textarea
+					ref={inputRef}
+					rows={1}
+					value={input}
+					onChange={(e) => setInput(e.target.value)}
+					onKeyDown={handleHomeFixedComposerKeyDown}
+					placeholder="Ask Raya to do anything..."
+					disabled={isLoading}
+				/>
+				<button type="submit" className="home-fixed-send-btn" disabled={isLoading || !input.trim()} aria-label="Send message">
+					<ArrowUp size={18} />
+				</button>
+			</form>
+		</div>
+	);
+
 	const renderHomeBrandContextCard = () => (
 		<div className="home-brand-context-row">
 			<button type="button" className="home-brand-context-card" onClick={onOpenBrandContext}>
@@ -569,12 +1013,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 					/>
 					<div className="home-brand-context-copy">
 						<strong>{activeBrand}</strong>
-						<span>Brand context score</span>
+						<span>{activeBrandContext.shortDescriptor}</span>
 					</div>
 				</div>
-				<div className="home-brand-context-ring" style={{ ["--brand-context-progress" as any]: `${brandContextScore}%` }}>
-					<div className="home-brand-context-ring-value" aria-label={`Brand context score ${brandContextScore}`}>
-						<span className="home-brand-context-ring-number">{brandContextScore}</span>
+				<div className="home-brand-context-score">
+					<span>Context score</span>
+					<div className="home-brand-context-ring" style={{ ["--brand-context-progress" as any]: `${brandContextScore}%` }}>
+						<div className="home-brand-context-ring-value" aria-label={`Brand context score ${brandContextScore}`}>
+							<span className="home-brand-context-ring-number">{brandContextScore}</span>
+						</div>
 					</div>
 				</div>
 			</button>
@@ -586,27 +1033,168 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 			<div className="chat-primary-column">
 				{headerContent && !isEmptyState && <div className="chat-interface-header">{headerContent}</div>}
 				{isEmptyState ? (
-					<div className="empty-state-container" ref={emptyStateRef}>
-						{renderHomeBrandContextCard()}
-						<div className="empty-state-header">
-						<div className="empty-state-title-row">
-							<RayaLogo size={36} variant="color" className="empty-state-brand-icon" />
-							<h2 className="center-brand">What would you like to do?</h2>
+					<>
+						<div className="empty-state-container" ref={emptyStateRef}>
+							{renderHomeBrandContextCard()}
+
+							<section className="home-recommended-section" aria-label="Recommended tasks">
+							<div className="home-section-header">
+								<div>
+									<h2>What to do next</h2>
+								</div>
+								<div className="home-carousel-controls" aria-label="Recommended task carousel controls">
+									<button type="button" onClick={() => scrollRecommendedTasks("left")} aria-label="Scroll recommended tasks left">
+										<ChevronLeft size={18} />
+									</button>
+									<button type="button" onClick={() => scrollRecommendedTasks("right")} aria-label="Scroll recommended tasks right">
+										<ChevronRight size={18} />
+									</button>
+								</div>
+							</div>
+							<div className="home-task-carousel" ref={taskCarouselRef}>
+								{RECOMMENDED_HOME_TASKS.map((task) => {
+									const Icon = RECOMMENDED_TASK_ICONS[task.icon];
+									return (
+										<button key={task.id} type="button" className="home-task-card" onClick={() => (onRunHomeTask ?? onSendMessage)(task.prompt)}>
+											<span className="home-task-card-watermark" aria-hidden="true">
+												<Icon size={112} strokeWidth={1.35} />
+											</span>
+											<span className="home-task-card-icon">
+												<Icon size={20} />
+											</span>
+											<span className="home-task-card-copy">
+												<strong>{task.title}</strong>
+												<span>{task.description}</span>
+											</span>
+											<span className="home-task-card-action">
+												Run Now
+												<ArrowUpRight size={14} />
+											</span>
+										</button>
+									);
+								})}
+							</div>
+							</section>
+
+							<section className="home-latest-insights" aria-label="Latest insights">
+							<div className="home-section-header">
+								<div>
+									<h2>Latest Insights</h2>
+								</div>
+							</div>
+
+							<div className="home-insights-list">
+								{runningHomeSessions.length > 0 && (
+									<div className="home-running-task-group">
+										<div className="home-running-task-header">
+											<div className="home-running-status-label">
+												<img src={rayaThinkingGif} alt="" className="home-running-raya-gif" />
+												<span className="home-running-status-pill">
+													{runningHomeSessions.length} running {runningHomeSessions.length === 1 ? "task" : "tasks"}
+												</span>
+											</div>
+											{runningHomeSessions.length > 1 && (
+												<div className="home-carousel-controls home-running-controls" aria-label="Running task controls">
+													<span>
+														{currentRunningIndex + 1}/{runningHomeSessions.length}
+													</span>
+													<button type="button" onClick={() => paginateRunningTasks("left")} aria-label="Show previous running task">
+														<ChevronLeft size={18} />
+													</button>
+													<button type="button" onClick={() => paginateRunningTasks("right")} aria-label="Show next running task">
+														<ChevronRight size={18} />
+													</button>
+												</div>
+											)}
+										</div>
+										{renderRunningSessionCard(runningHomeSessions[currentRunningIndex] ?? runningHomeSessions[0])}
+									</div>
+								)}
+
+								{completedHomeSessions.map((session) => {
+									const summary = session.summary;
+									if (!summary) {
+										return null;
+									}
+									const generatedDocuments = getGeneratedDocuments(session);
+									const hasArtifacts = summary.imageUrls.length > 0 || generatedDocuments.length > 0;
+
+									return (
+										<article key={session.id} className="home-insight-card">
+											<div className="home-insight-card-header">
+												<div className="home-summary-title-block">
+													<h3>{session.title}</h3>
+													<span className="home-insight-meta">{formatTaskTimestamp(session.completedAt ?? session.lastActivityAt)}</span>
+												</div>
+												{renderHomeCardActions(session.id)}
+											</div>
+
+											<div className={`home-summary-body ${hasArtifacts ? "" : "without-artifacts"}`}>
+												<div className="home-summary-insights-column">
+													<div className="home-summary-column-title">Key insights</div>
+													<div className="home-insight-points">
+														{summary.insights.slice(0, 4).map((insight, index) => {
+															const displayInsight = getDisplayInsight(insight, index);
+															return (
+																<div key={`${displayInsight.title}-${displayInsight.description}`} className="home-insight-point">
+																	<span className="home-insight-point-emoji" aria-hidden="true">
+																		{displayInsight.emoji}
+																	</span>
+																	<div className="home-insight-point-copy">
+																		<h4>{displayInsight.title}</h4>
+																		<ReactMarkdown remarkPlugins={[remarkGfm]}>{displayInsight.description}</ReactMarkdown>
+																	</div>
+																</div>
+															);
+														})}
+													</div>
+												</div>
+
+												{renderSummaryArtifacts(summary, generatedDocuments)}
+											</div>
+
+											{summary.nextSteps.length > 0 && (
+												<div className="home-next-steps">
+													<div className="home-next-steps-header">Next steps</div>
+													{summary.nextSteps.map((nextStep) => (
+														<button
+															key={`${nextStep.title}-${nextStep.prompt}`}
+															type="button"
+															className="home-next-step"
+															onClick={() => (onRunHomeTask ?? onSendMessage)(nextStep.prompt)}
+														>
+															<span className="home-next-step-main">
+																<span className="home-next-step-icon" aria-hidden="true">
+																	<Sparkles size={21} fill="currentColor" />
+																</span>
+																<span className="home-next-step-copy">
+																	<strong>{nextStep.title}</strong>
+																	<span>{nextStep.prompt}</span>
+																</span>
+															</span>
+															<span className="home-next-step-action">
+																<span>Run Now</span>
+																<ArrowUp size={14} />
+															</span>
+														</button>
+													))}
+												</div>
+											)}
+										</article>
+									);
+								})}
+
+								{runningHomeSessions.length === 0 && completedHomeSessions.length === 0 && (
+									<div className="home-insights-empty">
+										<Sparkles size={18} />
+										<span>Run a recommended task to create your first insight card.</span>
+									</div>
+								)}
+							</div>
+							</section>
 						</div>
-							<p className="center-brand-subtitle">Trained on insights from 5.4B in ad spend</p>
-						</div>
-						<div className="home-composer-stack">
-							{renderInputArea(true)}
-						</div>
-						<PromptSuggestions onPromptSelect={handlePromptSelect} />
-						{homeAutomations.length > 0 && onOpenAutomationRun && (
-							<AutomationHighlights
-								automations={homeAutomations}
-								onOpenAutomationRun={onOpenAutomationRun}
-								onExploreAutomations={onExploreAutomations}
-							/>
-						)}
-					</div>
+						{showComposer && renderHomeFixedComposer()}
+					</>
 				) : (
 					<div className="chat-messages-area" ref={chatMessagesAreaRef}>
 						<div className="chat-thread-shell">
@@ -623,6 +1211,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 										onOpenReport={openReportDocument}
 										onOpenImageConcept={openImageConceptDocument}
 										onOpenVideoConcept={openVideoConceptDocument}
+										onRunNextStep={onSendMessage}
 									/>
 								</div>
 							)}

@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { ArrowUp, ArrowUpRight } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { AutomationDefinition, formatHistoryTimestamp } from "../../automations/catalog";
+import { AutomationDefinition, formatHistoryTimestamp, getUniqueAutomations } from "../../automations/catalog";
 import { getAutomationMockRunById, getLatestAutomationMockRunByAutomationId } from "../../automations/mockRuns";
 import { FocusedItemCard, Message, StreamedSection } from "../../types";
 
@@ -108,7 +108,7 @@ const buildHighlightCardData = (automation: AutomationDefinition): AutomationHig
 };
 
 const AutomationHighlights: React.FC<AutomationHighlightsProps> = ({ automations, onOpenAutomationRun, onExploreAutomations }) => {
-	const cards = useMemo(() => automations.map(buildHighlightCardData), [automations]);
+	const cards = useMemo(() => getUniqueAutomations(automations).map(buildHighlightCardData), [automations]);
 
 	if (cards.length === 0) {
 		return null;

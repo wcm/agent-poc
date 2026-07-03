@@ -74,6 +74,7 @@ Return a JSON object ONLY:
 3. Apply filters only if explicitly requested
 4. Default sortBy to "roas" for performance queries, "spend" for spend queries
 5. For "top" queries use "desc", for "worst/bottom" use "asc"
+6. For relative date requests like "last 7 days", "latest", or "recent", do not invent calendar dates. Omit start_date filters unless the user gives exact dates.
 
 ## EXAMPLES
 
@@ -127,35 +128,31 @@ Generate the query parameters.
         }
 
         // 2. Build URL with query parameters
-        const params = new URLSearchParams();
-        
-        const requestedIntegration = queryParams.integration;
-        if (requestedIntegration) {
-            params.append('integration', requestedIntegration);
-            queryParams.integration = requestedIntegration;
-        } else {
-            params.append('integration', context.integration.id);
-            queryParams.integration = context.integration.id;
-        }
-        if (queryParams.groupBy) {
-            params.append('groupBy', queryParams.groupBy);
-        }
-        if (queryParams.filters) {
-            if (queryParams.filters.display_format) {
-                params.append('display_format', queryParams.filters.display_format);
+        queryParams.integration = queryParams.integration || context.integration.id;
+        const buildParams = (includeDateFilters: boolean) => {
+            const params = new URLSearchParams();
+            params.append('integration', queryParams.integration || context.integration.id);
+            if (queryParams.groupBy) {
+                params.append('groupBy', queryParams.groupBy);
             }
-            if (queryParams.filters.status) {
-                params.append('status', queryParams.filters.status);
+            if (queryParams.filters) {
+                if (queryParams.filters.display_format) {
+                    params.append('display_format', queryParams.filters.display_format);
+                }
+                if (queryParams.filters.status) {
+                    params.append('status', queryParams.filters.status);
+                }
+                if (includeDateFilters && queryParams.filters.start_date_from) {
+                    params.append('start_date_from', queryParams.filters.start_date_from);
+                }
+                if (includeDateFilters && queryParams.filters.start_date_to) {
+                    params.append('start_date_to', queryParams.filters.start_date_to);
+                }
             }
-            if (queryParams.filters.start_date_from) {
-                params.append('start_date_from', queryParams.filters.start_date_from);
-            }
-            if (queryParams.filters.start_date_to) {
-                params.append('start_date_to', queryParams.filters.start_date_to);
-            }
-        }
+            return params;
+        };
 
-        const url = `${this.baseUrl}/api/own-analytics?${params.toString()}`;
+        const url = `${this.baseUrl}/api/own-analytics?${buildParams(true).toString()}`;
         logger.debug('DataQueryTool', 'Calling API', { url });
 
         // 3. Call the actual API
@@ -165,13 +162,36 @@ Generate the query parameters.
                 throw new Error(`API returned ${response.status}: ${response.statusText}`);
             }
             
-            const data = await response.json();
+            let data = await response.json();
             let ads: AdData[] = data.ads || [];
             
             logger.debug('DataQueryTool', 'API Response received', { 
                 totalAds: ads.length,
                 groupBy: data.groupBy
             });
+
+            const hasDateFilters = Boolean(queryParams.filters?.start_date_from || queryParams.filters?.start_date_to);
+            if (ads.length === 0 && hasDateFilters && this.shouldFallbackToLatestAvailableData(stepDescription, context.userInput)) {
+                const fallbackUrl = `${this.baseUrl}/api/own-analytics?${buildParams(false).toString()}`;
+                logger.debug('DataQueryTool', 'No rows matched relative date filters; retrying latest available data', { fallbackUrl });
+
+                const fallbackResponse = await fetch(fallbackUrl);
+                if (!fallbackResponse.ok) {
+                    throw new Error(`API returned ${fallbackResponse.status}: ${fallbackResponse.statusText}`);
+                }
+
+                data = await fallbackResponse.json();
+                ads = data.ads || [];
+                if (queryParams.filters) {
+                    delete queryParams.filters.start_date_from;
+                    delete queryParams.filters.start_date_to;
+                }
+
+                logger.debug('DataQueryTool', 'Fallback API response received', {
+                    totalAds: ads.length,
+                    groupBy: data.groupBy
+                });
+            }
 
             // 4. Sort the results
             if (queryParams.sortBy && ads.length > 0) {
@@ -257,6 +277,13 @@ Generate the query parameters.
         // }
         
         return message;
+    }
+
+    private shouldFallbackToLatestAvailableData(stepDescription: string, userInput: string): boolean {
+        const combined = `${stepDescription}\n${userInput}`.toLowerCase();
+        const asksForRelativeWindow = /\b(last|latest|recent|newest|fresh|emerging)\b/.test(combined);
+        const includesExplicitIsoDate = /\b20\d{2}-\d{2}-\d{2}\b/.test(userInput);
+        return asksForRelativeWindow && !includesExplicitIsoDate;
     }
 }
 

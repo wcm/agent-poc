@@ -61,6 +61,64 @@ Do NOT include image tags or URLs. The concept_detail will be used as an image g
 export interface ImageGenerationResult {
     generationResult: GenerationResult;
     concepts: ImageConcept[];
+    metadata?: ImageGenerationMetadata;
+}
+
+export interface ImagePersistenceInput {
+    concept: Omit<ImageConcept, 'imageDataUrl' | 'status'>;
+    conceptIndex: number;
+    imageUrl: string;
+    item: FocusedItemCard;
+    request: GeneratedImageRequestRecord;
+    response: any;
+}
+
+export interface ImagePersistenceResult {
+    imageUrl: string;
+    localPath?: string;
+    originalImageUrl?: string;
+    isLocal: boolean;
+}
+
+export interface ImageGenerationExecutionOptions {
+    persistImage?: (input: ImagePersistenceInput) => Promise<ImagePersistenceResult>;
+}
+
+export interface GeneratedImageRequestRecord {
+    url: string;
+    model: string;
+    prompt: string;
+    originalImageUrl?: string;
+    logoUrl?: string;
+    body: any;
+}
+
+export interface GeneratedImageResponseRecord {
+    conceptIndex: number;
+    status: 'done' | 'failed';
+    imageUrl: string;
+    originalImageUrl?: string;
+    localPath?: string;
+    isLocal?: boolean;
+    providerImage?: any;
+    request?: GeneratedImageRequestRecord;
+    response?: any;
+    error?: string;
+}
+
+export interface ImageGenerationMetadata {
+    visualAnalysis: string;
+    logoUrl?: string;
+    conceptPrompt: string;
+    conceptResponseRaw: string;
+    imageResponses: GeneratedImageResponseRecord[];
+}
+
+interface GeneratedImageApiResult {
+    imageUrl: string;
+    providerImage?: any;
+    request: GeneratedImageRequestRecord;
+    response: any;
 }
 
 class ImageGenerationToolWrapper {
@@ -75,7 +133,8 @@ class ImageGenerationToolWrapper {
         report: CreativeReport,
         context: GlobalContext,
         stream: StreamEmitter,
-        numConcepts: number = 4
+        numConcepts: number = 4,
+        options: ImageGenerationExecutionOptions = {}
     ): Promise<ImageGenerationResult> {
         logger.debug('ImageGenerationTool', `Generating ${numConcepts} concepts for ${item.name}`);
 
@@ -107,6 +166,7 @@ class ImageGenerationToolWrapper {
         const conceptPrompt = this.buildConceptPrompt(item, report, visualAnalysis, logoUrl, numConcepts);
         const conceptsJson = await conceptGeneratorTool.process(conceptPrompt);
         const parsedConcepts = this.parseConcepts(conceptsJson, numConcepts);
+        const imageResponses: GeneratedImageResponseRecord[] = [];
 
         // Phase 2: Stream concepts with "generating" status (concepts are known, images pending)
         const generatingConcepts: ImageConcept[] = parsedConcepts.map(c => ({
@@ -117,12 +177,45 @@ class ImageGenerationToolWrapper {
         // Phase 3: Generate all images in parallel, streaming each as it completes
         const imagePromises = parsedConcepts.map((concept, index) =>
             this.generateImage(concept, item.thumbnail, logoUrl)
-                .then(imageDataUrl => {
+                .then(async generatedImage => {
+                    let imageDataUrl = generatedImage.imageUrl;
+                    let persistence: ImagePersistenceResult | undefined;
+
+                    if (options.persistImage) {
+                        persistence = await options.persistImage({
+                            concept,
+                            conceptIndex: index,
+                            imageUrl: generatedImage.imageUrl,
+                            item,
+                            request: generatedImage.request,
+                            response: generatedImage.response
+                        });
+                        imageDataUrl = persistence.imageUrl;
+                    }
+
+                    imageResponses[index] = {
+                        conceptIndex: index,
+                        status: 'done',
+                        imageUrl: imageDataUrl,
+                        originalImageUrl: persistence?.originalImageUrl || generatedImage.imageUrl,
+                        localPath: persistence?.localPath,
+                        isLocal: persistence?.isLocal,
+                        providerImage: generatedImage.providerImage,
+                        request: generatedImage.request,
+                        response: generatedImage.response
+                    };
+
                     logger.debug('ImageGenerationTool', `Image ${index + 1}/${parsedConcepts.length} done: ${concept.concept_name}`);
                     stream({ type: 'image_concept_update', itemId: item.id, conceptIndex: index, imageDataUrl, status: 'done' });
                     return imageDataUrl;
                 })
                 .catch((e: any) => {
+                    imageResponses[index] = {
+                        conceptIndex: index,
+                        status: 'failed',
+                        imageUrl: '',
+                        error: e.message
+                    };
                     logger.log('ERROR', { component: 'ImageGenerationTool', action: 'GENERATE_IMAGE' }, `Failed concept ${index + 1}: ${e.message}`);
                     stream({ type: 'image_concept_update', itemId: item.id, conceptIndex: index, imageDataUrl: '', status: 'failed' });
                     return '';
@@ -148,7 +241,17 @@ class ImageGenerationToolWrapper {
 
         context.generationResults.push(generationResult);
 
-        return { generationResult, concepts: imageConcepts };
+        return {
+            generationResult,
+            concepts: imageConcepts,
+            metadata: {
+                visualAnalysis,
+                logoUrl,
+                conceptPrompt,
+                conceptResponseRaw: conceptsJson,
+                imageResponses
+            }
+        };
     }
 
     private findBrandLogo(context: GlobalContext): string | undefined {
@@ -231,22 +334,13 @@ class ImageGenerationToolWrapper {
         concept: Omit<ImageConcept, 'imageDataUrl' | 'status'>,
         originalImageUrl?: string,
         logoUrl?: string
-    ): Promise<string> {
+    ): Promise<GeneratedImageApiResult> {
         if (!this.apiKey) {
             throw new Error('OPENROUTER_API_KEY not configured');
         }
 
-        const imagePrompt = `Create an advertisement image based on this creative concept:
+        const imagePrompt = this.buildImagePrompt(concept);
 
-${concept.concept_detail}
-
-Style direction: ${concept.concept_description}
-Target audience: ${concept.personas.join(', ')}
-Emotional tone: ${concept.creative_tags.emotion.join(', ')}
-
-Create a polished, professional ad creative suitable for digital advertising. Do not include any watermarks or placeholder text.`;
-
-        // Build message content parts
         const contentParts: any[] = [{ type: 'text', text: imagePrompt }];
 
         // Include original ad as reference
@@ -265,6 +359,28 @@ Create a polished, professional ad creative suitable for digital advertising. Do
             });
         }
 
+        const requestBody = {
+            model: IMAGE_GEN_MODEL,
+            messages: [{
+                role: 'user',
+                content: contentParts
+            }],
+            modalities: ['image', 'text'],
+            image_config: {
+                aspect_ratio: '1:1',
+                image_size: '1K'
+            }
+        };
+
+        const request: GeneratedImageRequestRecord = {
+            url: OPENROUTER_API_URL,
+            model: IMAGE_GEN_MODEL,
+            prompt: imagePrompt,
+            originalImageUrl,
+            logoUrl,
+            body: requestBody
+        };
+
         const response = await fetch(OPENROUTER_API_URL, {
             method: 'POST',
             headers: {
@@ -273,18 +389,7 @@ Create a polished, professional ad creative suitable for digital advertising. Do
                 'HTTP-Referer': 'https://localhost:3000',
                 'X-Title': 'Atria Agent POC'
             },
-            body: JSON.stringify({
-                model: IMAGE_GEN_MODEL,
-                messages: [{
-                    role: 'user',
-                    content: contentParts
-                }],
-                modalities: ['image', 'text'],
-                image_config: {
-                    aspect_ratio: '1:1',
-                    image_size: '1K'
-                }
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -293,13 +398,72 @@ Create a polished, professional ad creative suitable for digital advertising. Do
         }
 
         const data = await response.json();
-        const images = data.choices?.[0]?.message?.images;
+        const extractedImage = this.extractImageFromResponse(data);
 
-        if (images && images.length > 0) {
-            return images[0].image_url.url;
+        if (extractedImage) {
+            return {
+                imageUrl: extractedImage.imageUrl,
+                providerImage: extractedImage.providerImage,
+                request,
+                response: data
+            };
         }
 
         throw new Error('No image returned from generation model');
+    }
+
+    private buildImagePrompt(concept: Omit<ImageConcept, 'imageDataUrl' | 'status'>): string {
+        return `Create an advertisement image based on this creative concept:
+
+${concept.concept_detail}
+
+Style direction: ${concept.concept_description}
+Target audience: ${concept.personas.join(', ')}
+Emotional tone: ${concept.creative_tags.emotion.join(', ')}
+
+Create a polished, professional ad creative suitable for digital advertising. Do not include any watermarks or placeholder text.`;
+    }
+
+    private extractImageFromResponse(data: any): { imageUrl: string; providerImage?: any } | null {
+        const message = data?.choices?.[0]?.message;
+        const candidates = [
+            ...(Array.isArray(message?.images) ? message.images : []),
+            ...(Array.isArray(data?.images) ? data.images : []),
+            ...(Array.isArray(data?.data) ? data.data : [])
+        ];
+
+        for (const candidate of candidates) {
+            const imageUrl =
+                candidate?.image_url?.url ||
+                candidate?.image_url ||
+                candidate?.url ||
+                candidate?.data_url ||
+                candidate?.dataUrl;
+
+            if (typeof imageUrl === 'string' && imageUrl.length > 0) {
+                return { imageUrl, providerImage: candidate };
+            }
+
+            const base64Image =
+                candidate?.b64_json ||
+                candidate?.base64 ||
+                candidate?.image?.base64 ||
+                candidate?.image_base64;
+
+            if (typeof base64Image === 'string' && base64Image.length > 0) {
+                const cleaned = base64Image.includes(',') ? base64Image.split(',').pop() : base64Image;
+                return { imageUrl: `data:image/png;base64,${cleaned}`, providerImage: candidate };
+            }
+        }
+
+        if (typeof message?.content === 'string') {
+            const dataUrlMatch = message.content.match(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/);
+            if (dataUrlMatch) {
+                return { imageUrl: dataUrlMatch[0] };
+            }
+        }
+
+        return null;
     }
 }
 

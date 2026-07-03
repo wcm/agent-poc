@@ -10,10 +10,33 @@ export interface PlanTask {
     status: TaskStatus;
 }
 
+export interface RunNextStep {
+    title: string;
+    prompt: string;
+}
+
+export interface RunInsight {
+    emoji: string;
+    title: string;
+    description: string;
+}
+
+export interface RunSummary {
+    imageUrls: string[];
+    insights: RunInsight[];
+    nextSteps: RunNextStep[];
+}
+
 // Text event
 export interface TextEvent {
     type: 'text';
     content: string;
+}
+
+// Run title event
+export interface RunTitleEvent {
+    type: 'run_title';
+    title: string;
 }
 
 // Plan event
@@ -90,6 +113,12 @@ export interface DoneEvent {
     type: 'done';
 }
 
+// Run summary event
+export interface RunSummaryEvent {
+    type: 'run_summary';
+    summary: RunSummary;
+}
+
 // Error event
 export interface ErrorEvent {
     type: 'error';
@@ -117,6 +146,75 @@ export type ImageConceptStatus = 'pending' | 'generating' | 'done' | 'failed';
 export interface ImageConcept extends AdConceptBase {
     imageDataUrl: string;
     status: ImageConceptStatus;
+}
+
+export interface GeneratedImageSourceAd {
+    id: string;
+    name: string;
+    creativeName?: string;
+    headline?: string;
+    adCopy?: string;
+    imageUrl?: string;
+    integrationId?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string | null;
+    metrics?: Record<string, number>;
+}
+
+export interface GeneratedImageRun {
+    id: string;
+    createdAt: string;
+    completedAt?: string;
+    status: 'running' | 'completed' | 'completed_with_errors' | 'failed';
+    requestedCount: number;
+    generatedCount: number;
+    conceptsPerSource: number;
+    integrationId: string;
+    selectionStrategy: string;
+    sourceAds: GeneratedImageSourceAd[];
+    errors: Array<{
+        sourceAdId?: string;
+        message: string;
+    }>;
+}
+
+export interface GeneratedImageAdFile {
+    id: string;
+    runId: string;
+    kind: 'image_ad_variation';
+    status: 'done' | 'failed';
+    createdAt: string;
+    itemId: string;
+    itemName: string;
+    sourceAd: GeneratedImageSourceAd;
+    conceptIndex: number;
+    imageUrl: string;
+    generatedImageUrl: string;
+    originalGeneratedImageUrl?: string;
+    localPath?: string;
+    isLocal?: boolean;
+    concept: ImageConcept;
+    generation?: {
+        model?: string;
+        request?: {
+            model?: string;
+            prompt?: string;
+            originalImageUrl?: string;
+            logoUrl?: string;
+        };
+        response?: unknown;
+        providerImage?: unknown;
+        error?: string;
+    };
+}
+
+export interface GeneratedImageAdsManifest {
+    version: 1;
+    updatedAt: string | null;
+    images: GeneratedImageAdFile[];
+    runs: GeneratedImageRun[];
+    manifestPath?: string;
 }
 
 export interface VideoConcept extends AdConceptBase {
@@ -150,13 +248,15 @@ export interface VideoConceptsEvent {
 
 // Union type of all SSE events
 export type SSEEvent = 
-    | TextEvent 
+    | TextEvent
+    | RunTitleEvent
     | PlanEvent 
     | PlanStatusEvent 
     | ReportEvent 
     | IntegrationResultEvent
     | FocusedItemsEvent 
     | ContextUpdateEvent 
+    | RunSummaryEvent
     | DoneEvent
     | ErrorEvent
     | ImageConceptsEvent
@@ -220,7 +320,8 @@ export type StreamedSection =
     | { type: 'integration_result'; resultId: string; integrationId: string; integrationName: string; title: string; status: IntegrationResultStatus; mode: 'data' | 'instruction'; content: string }
     | { type: 'focused_items'; items: FocusedItemCard[] }
     | { type: 'image_concepts'; itemId: string; itemName: string; concepts: ImageConcept[] }
-    | { type: 'video_concepts'; itemId: string; itemName: string; concepts: VideoConcept[] };
+    | { type: 'video_concepts'; itemId: string; itemName: string; concepts: VideoConcept[] }
+    | { type: 'next_steps'; steps: RunNextStep[] };
 
 /**
  * Message with streaming sections
@@ -248,6 +349,7 @@ export interface Session {
     completedAt: number | null;
     streamingSections: StreamedSection[];
     planTaskStates: Record<string, PlanTask[]>;
+    summary?: RunSummary;
 }
 
 /**

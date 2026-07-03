@@ -36,6 +36,7 @@ export const AUTOMATION_WEEKDAYS: AutomationWeekday[] = ["Monday", "Tuesday", "W
 export const AUTOMATION_MONTH_DATES = Array.from({ length: 28 }, (_, index) => index + 1);
 
 const rawAutomationCatalog = automationCatalog as AutomationDefinition[];
+const rawAutomationIds = new Set(rawAutomationCatalog.map((automation) => automation.id));
 
 const cloneAutomation = (automation: AutomationDefinition): AutomationDefinition => ({
 	...automation,
@@ -74,6 +75,25 @@ const mergeAutomationHistory = (
 
 export const getInitialAutomations = (): AutomationDefinition[] => rawAutomationCatalog.map(cloneAutomation);
 
+const getAutomationDisplayKey = (automation: AutomationDefinition) => automation.name.trim().toLowerCase() || automation.id;
+
+const getAutomationDisplayScore = (automation: AutomationDefinition) =>
+	(automation.status === "active" ? 4 : 0) + (rawAutomationIds.has(automation.id) ? 2 : 0) + (automation.history.length > 0 ? 1 : 0);
+
+export const getUniqueAutomations = (automations: AutomationDefinition[]): AutomationDefinition[] => {
+	const automationsByKey = new Map<string, AutomationDefinition>();
+
+	automations.forEach((automation) => {
+		const key = getAutomationDisplayKey(automation);
+		const existingAutomation = automationsByKey.get(key);
+		if (!existingAutomation || getAutomationDisplayScore(automation) > getAutomationDisplayScore(existingAutomation)) {
+			automationsByKey.set(key, automation);
+		}
+	});
+
+	return Array.from(automationsByKey.values());
+};
+
 export const mergePersistedAutomations = (persistedAutomations: AutomationDefinition[]): AutomationDefinition[] => {
 	const persistedById = new Map(persistedAutomations.map((automation) => [automation.id, cloneAutomation(automation)]));
 
@@ -102,12 +122,13 @@ export const mergePersistedAutomations = (persistedAutomations: AutomationDefini
 };
 
 export const filterAutomations = (automations: AutomationDefinition[], query: string) => {
+	const uniqueAutomations = getUniqueAutomations(automations);
 	const normalized = query.trim().toLowerCase();
 	if (!normalized) {
-		return automations;
+		return uniqueAutomations;
 	}
 
-	return automations.filter((automation) => {
+	return uniqueAutomations.filter((automation) => {
 		const haystack = [automation.name, automation.description, automation.prompt, automation.frequency, ...automation.integrations].join(" ").toLowerCase();
 		return haystack.includes(normalized);
 	});
