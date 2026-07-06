@@ -188,6 +188,30 @@ const Sidebar: React.FC<SidebarProps> = ({
 											<span className="session-item-title">Home</span>
 										</div>
 
+										<div
+											className={`session-item raya-new-task-item ${activeRayaView === "home2" ? "active" : ""}`}
+											onClick={() => {
+												onRayaViewChange?.("home2");
+												onAutomationSelect?.(null);
+												onAutomationModeChange?.("overview");
+											}}
+										>
+											<House size={16} />
+											<span className="session-item-title">Home-2</span>
+										</div>
+
+										<div
+											className={`session-item raya-new-task-item ${activeRayaView === "home3" ? "active" : ""}`}
+											onClick={() => {
+												onRayaViewChange?.("home3");
+												onAutomationSelect?.(null);
+												onAutomationModeChange?.("overview");
+											}}
+										>
+											<House size={16} />
+											<span className="session-item-title">Home-3</span>
+										</div>
+
 										<div className={`session-item raya-subview-item ${activeRayaView === "brandContext" ? "active" : ""}`} onClick={handleBrandContextClick}>
 											<BookOpenText size={16} />
 											<span className="session-item-title">Brand Context</span>

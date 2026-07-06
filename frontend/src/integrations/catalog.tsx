@@ -36,7 +36,7 @@ export const INTEGRATION_SECTIONS: Array<{ id: IntegrationSectionId; label: stri
 
 export const INTEGRATIONS_PAGE_SECTIONS = INTEGRATION_SECTIONS.filter((section) => section.id !== "myConnections");
 
-export const INTEGRATION_STATE_STORAGE_KEY = "raya.integration.state";
+export const INTEGRATION_STATE_STORAGE_KEY = "raya.integration.state.v2";
 
 const createServiceLogoRenderer =
 	(logoId: ServiceLogoId, alt: string) => (size = 24, variant: IntegrationLogoVariant = "default") =>

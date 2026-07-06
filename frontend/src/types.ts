@@ -84,6 +84,8 @@ export interface ReportEvent {
 }
 
 export type IntegrationResultStatus = 'connected' | 'available' | 'coming_soon' | 'unknown';
+export type IntegrationResultMode = 'data' | 'instruction' | 'action';
+export type IntegrationActionStatus = 'completed' | 'connection_required' | 'unavailable' | 'unknown';
 
 export interface IntegrationResultEvent {
     type: 'integration_result';
@@ -92,7 +94,10 @@ export interface IntegrationResultEvent {
     integrationName: string;
     title: string;
     status: IntegrationResultStatus;
-    mode: 'data' | 'instruction';
+    mode: IntegrationResultMode;
+    actionStatus?: IntegrationActionStatus;
+    isBlocking?: boolean;
+    canConnect?: boolean;
     content: string;
 }
 
@@ -117,6 +122,15 @@ export interface DoneEvent {
 export interface RunSummaryEvent {
     type: 'run_summary';
     summary: RunSummary;
+}
+
+export interface RunBlockedEvent {
+    type: 'run_blocked';
+    reason: 'integration_connection_required';
+    integrationId: string;
+    integrationName: string;
+    resultId: string;
+    message: string;
 }
 
 // Error event
@@ -257,6 +271,7 @@ export type SSEEvent =
     | FocusedItemsEvent 
     | ContextUpdateEvent 
     | RunSummaryEvent
+    | RunBlockedEvent
     | DoneEvent
     | ErrorEvent
     | ImageConceptsEvent
@@ -317,7 +332,7 @@ export type StreamedSection =
     | { type: 'text'; content: string }
     | { type: 'plan'; planId: string; agentName: string; title: string; tasks: PlanTask[] }
     | { type: 'report'; reportType: 'performance' | 'creative' | 'common'; reportId: string; title: string; content: string; itemId?: string; itemName?: string; itemData?: ReportItemData }
-    | { type: 'integration_result'; resultId: string; integrationId: string; integrationName: string; title: string; status: IntegrationResultStatus; mode: 'data' | 'instruction'; content: string }
+    | { type: 'integration_result'; resultId: string; integrationId: string; integrationName: string; title: string; status: IntegrationResultStatus; mode: IntegrationResultMode; actionStatus?: IntegrationActionStatus; isBlocking?: boolean; canConnect?: boolean; content: string }
     | { type: 'focused_items'; items: FocusedItemCard[] }
     | { type: 'image_concepts'; itemId: string; itemName: string; concepts: ImageConcept[] }
     | { type: 'video_concepts'; itemId: string; itemName: string; concepts: VideoConcept[] }
@@ -350,6 +365,12 @@ export interface Session {
     streamingSections: StreamedSection[];
     planTaskStates: Record<string, PlanTask[]>;
     summary?: RunSummary;
+    home2Run?: {
+        surface?: 'home2' | 'home3';
+        sectionId: string;
+        taskId: string;
+        taskIndex: number;
+    };
 }
 
 /**
@@ -386,7 +407,7 @@ export interface Integration {
 
 export type AnalyticsDashboardView = "top_spend" | "top_videos" | "top_images";
 
-export type RayaView = "tasks" | "brandContext" | "integrations" | "automations";
+export type RayaView = "tasks" | "home2" | "home3" | "brandContext" | "integrations" | "automations";
 
 /**
  * Brand and Ad types

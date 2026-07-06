@@ -8,7 +8,7 @@ import { MessageContent } from "../../MessageContent";
 import PlanTimeline from "./PlanTimeline";
 import DocumentPanel, { ChatDocument } from "./DocumentPanel";
 import AssistantStreamingIndicator, { AssistantStreamingPhase } from "./AssistantStreamingIndicator";
-import { ResolvedIntegration } from "../../integrations/catalog";
+import { getIntegrationDefinitionById, ResolvedIntegration } from "../../integrations/catalog";
 import { findBrandContext, getBrandContext, getBrandContextCompletionScore, getBrandContextPrimaryLogo } from "../../brandContext/catalog";
 import BrandLogoMark from "../BrandContext/BrandLogoMark";
 import MyConnectionsModal from "./MyConnectionsModal";
@@ -25,6 +25,7 @@ interface ChatInterfaceProps {
 	onSendMessage: (message: string) => void;
 	onRunHomeTask?: (message: string) => void;
 	onSessionSelect: (sessionId: string) => void;
+	onConnectRequiredIntegration?: (sessionId: string, integrationId: string) => Promise<void> | void;
 	onSetupAutomation?: () => void;
 	onOpenIntegrations: () => void;
 	onOpenBrandContext: () => void;
@@ -194,6 +195,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	onSendMessage,
 	onRunHomeTask,
 	onSessionSelect,
+	onConnectRequiredIntegration,
 	onSetupAutomation,
 	onOpenIntegrations,
 	onOpenBrandContext,
@@ -535,6 +537,47 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		return sections;
 	};
 
+	const getBlockingIntegrationResult = (session: Session) => {
+		const sections = getSessionSections(session);
+		const completedActionIntegrations = new Set<string>();
+		for (let index = sections.length - 1; index >= 0; index -= 1) {
+			const section = sections[index];
+			if (section.type !== "integration_result") {
+				continue;
+			}
+			if (section.actionStatus === "completed") {
+				completedActionIntegrations.add(section.integrationId);
+				continue;
+			}
+			if (section.isBlocking && !completedActionIntegrations.has(section.integrationId)) {
+				return section;
+			}
+		}
+
+		return null;
+	};
+
+	const renderConnectionRequiredCard = (session: Session, section: Extract<StreamedSection, { type: "integration_result" }>) => {
+		const definition = getIntegrationDefinitionById(section.integrationId);
+		const integrationName = section.integrationName || definition?.name || section.integrationId;
+
+		return (
+			<button
+				type="button"
+				className="home-running-connection-required"
+				disabled={!section.canConnect}
+				onClick={() => section.canConnect && onConnectRequiredIntegration?.(session.id, section.integrationId)}
+			>
+				<span className="home-running-connection-logo">{definition?.renderLogo(34) ?? <Plug size={18} />}</span>
+				<span className="home-running-connection-copy">
+					<strong>{section.title}</strong>
+					<span>{section.content}</span>
+				</span>
+				<span className="home-running-connection-action">{section.canConnect ? `Connect ${integrationName}` : "Not available"}</span>
+			</button>
+		);
+	};
+
 	const getGeneratedDocuments = (session: Session) => {
 		const documents: Array<{ id: string; title: string; kind: string }> = [];
 		const seen = new Set<string>();
@@ -648,7 +691,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 				case "video_concepts":
 					return `Drafting video concepts for ${section.itemName}`;
 				case "integration_result":
-					return section.title;
+					return section.actionStatus === "connection_required" ? `${section.integrationName} connection required` : section.title;
 				default:
 					break;
 			}
@@ -682,7 +725,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 					feedItems.push({ id: `videos-${section.itemId}`, label: "Creative", text: `Prepared video scripts for ${section.itemName}` });
 					break;
 				case "integration_result":
-					feedItems.push({ id: `integration-${section.resultId}`, label: "Source", text: section.title });
+					if (section.isBlocking) {
+						break;
+					}
+					feedItems.push({ id: `integration-${section.resultId}`, label: section.mode === "action" ? "Action" : "Source", text: section.title });
 					break;
 				default:
 					break;
@@ -760,6 +806,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		const activity = getRunningSessionActivity(session);
 		const imageUrls = getRunningSessionImages(session);
 		const feedItems = getRunningSessionFeed(session);
+		const blockingIntegration = getBlockingIntegrationResult(session);
 		const activeTaskNumber = activeTask ? tasks.findIndex((task) => task.id === activeTask.id) + 1 : 0;
 		const activeToolName = activeTask?.tool.replace(/([A-Z])/g, " $1").replace(/^./, (value) => value.toUpperCase()) ?? "Planning";
 
@@ -771,6 +818,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 					</div>
 					{renderHomeCardActions(session.id, { showSetupAutomation: false })}
 				</div>
+
+				{blockingIntegration && renderConnectionRequiredCard(session, blockingIntegration)}
 
 				<div className="home-running-progress-shell" aria-label={`${completedCount} of ${tasks.length || 1} steps complete`}>
 					<div className="home-running-progress-fill" style={{ width: `${progressPercent}%` }} />
@@ -830,6 +879,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 						onOpenImageConcept={openImageConceptDocument}
 						onOpenVideoConcept={openVideoConceptDocument}
 						onRunNextStep={onSendMessage}
+						onConnectRequiredIntegration={sessionId ? (integrationId) => onConnectRequiredIntegration?.(sessionId, integrationId) : undefined}
 					/>
 				</div>
 			);
@@ -1212,6 +1262,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 										onOpenImageConcept={openImageConceptDocument}
 										onOpenVideoConcept={openVideoConceptDocument}
 										onRunNextStep={onSendMessage}
+										onConnectRequiredIntegration={sessionId ? (integrationId) => onConnectRequiredIntegration?.(sessionId, integrationId) : undefined}
 									/>
 								</div>
 							)}

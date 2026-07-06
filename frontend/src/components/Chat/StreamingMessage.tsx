@@ -16,6 +16,7 @@ interface StreamingMessageProps {
 	onOpenImageConcept?: (itemId: string, itemName: string, concept: ImageConcept, index: number) => void;
 	onOpenVideoConcept?: (itemId: string, itemName: string, concept: VideoConcept, index: number) => void;
 	onRunNextStep?: (prompt: string) => void;
+	onConnectRequiredIntegration?: (integrationId: string) => void;
 }
 
 /**
@@ -29,7 +30,8 @@ const renderSection = (
 	onOpenReport?: (section: Extract<StreamedSection, { type: "report" }>) => void,
 	onOpenImageConcept?: (itemId: string, itemName: string, concept: ImageConcept, index: number) => void,
 	onOpenVideoConcept?: (itemId: string, itemName: string, concept: VideoConcept, index: number) => void,
-	onRunNextStep?: (prompt: string) => void
+	onRunNextStep?: (prompt: string) => void,
+	onConnectRequiredIntegration?: (integrationId: string) => void
 ) => {
 	switch (section.type) {
 		case "text":
@@ -60,7 +62,11 @@ const renderSection = (
 					title={section.title}
 					status={section.status}
 					mode={section.mode}
+					actionStatus={section.actionStatus}
+					isBlocking={section.isBlocking}
+					canConnect={section.canConnect}
 					content={section.content}
+					onConnect={onConnectRequiredIntegration}
 				/>
 			);
 
@@ -117,7 +123,16 @@ const renderSection = (
 	}
 };
 
-const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept, onRunNextStep }) => {
+const StreamingMessage: React.FC<StreamingMessageProps> = ({
+	sections,
+	planStates,
+	activeDocumentId,
+	onOpenReport,
+	onOpenImageConcept,
+	onOpenVideoConcept,
+	onRunNextStep,
+	onConnectRequiredIntegration,
+}) => {
 	if (sections.length === 0) {
 		return null;
 	}
@@ -127,7 +142,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({ sections, planState
 	return (
 		<div className="response-with-plan">
 			{contentSections.map((section, index) =>
-				renderSection(section, index, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept, onRunNextStep)
+				renderSection(section, index, planStates, activeDocumentId, onOpenReport, onOpenImageConcept, onOpenVideoConcept, onRunNextStep, onConnectRequiredIntegration)
 			)}
 		</div>
 	);

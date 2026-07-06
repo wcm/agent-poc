@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { Agent } from "../agent";
-import { FocusedItemCard, FrontendIntegrationInfo, ImageConcept, PlanTask, SSEEvent, VideoConcept } from "../types";
+import { FocusedItemCard, FrontendIntegrationInfo, ImageConcept, IntegrationActionStatus, IntegrationResultMode, PlanTask, SSEEvent, VideoConcept } from "../types";
 
 interface AutomationCatalogEntry {
     id: string;
@@ -53,7 +53,10 @@ interface CapturedIntegrationSection {
     integrationName: string;
     title: string;
     status: "connected" | "available" | "coming_soon" | "unknown";
-    mode: "data" | "instruction";
+    mode: IntegrationResultMode;
+    actionStatus?: IntegrationActionStatus;
+    isBlocking?: boolean;
+    canConnect?: boolean;
     content: string;
 }
 
@@ -231,6 +234,9 @@ const createRunAssembler = (automationId: string, prompt: string, timestamp: str
                     title: event.title,
                     status: event.status,
                     mode: event.mode,
+                    actionStatus: event.actionStatus,
+                    isBlocking: event.isBlocking,
+                    canConnect: event.canConnect,
                     content: event.content,
                 });
                 if (event.status !== "connected" && event.mode === "instruction") {

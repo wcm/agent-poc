@@ -1,5 +1,6 @@
 import { generateId, GlobalContext } from '../context';
 import { findIntegrationByText } from '../integrations';
+import { requireIntegration } from '../integration-requirements';
 import { WorkspaceIntegrationInfo, IntegrationResultRecord } from '../types';
 import { logger } from '../utils/logger';
 
@@ -12,8 +13,8 @@ class IntegrationsToolWrapper {
     async execute(stepDescription: string, context: GlobalContext): Promise<IntegrationToolResult> {
         logger.debug('IntegrationsTool', 'Executing integration step', { stepDescription });
 
-        const searchText = `${stepDescription}\n${context.userInput}`;
-        const integration = findIntegrationByText(searchText, context.integrations);
+        const integration = findIntegrationByText(stepDescription, context.integrations)
+            || findIntegrationByText(context.userInput, context.integrations);
 
         const result = integration
             ? this.buildIntegrationResult(integration, stepDescription, context)
@@ -32,6 +33,17 @@ class IntegrationsToolWrapper {
         stepDescription: string,
         context: GlobalContext
     ): IntegrationResultRecord {
+        const requirement = requireIntegration(context, {
+            integration,
+            mode: 'instruction',
+            query: stepDescription,
+            purpose: 'use this integration'
+        });
+
+        if (requirement.block) {
+            return requirement.block;
+        }
+
         if (integration.status === 'connected') {
             return {
                 id: generateId('integration'),
@@ -42,21 +54,6 @@ class IntegrationsToolWrapper {
                 mode: 'data',
                 query: stepDescription,
                 content: this.buildConnectedResponse(integration, stepDescription, context),
-                shouldContinue: true,
-                timestamp: Date.now()
-            };
-        }
-
-        if (integration.status === 'available') {
-            return {
-                id: generateId('integration'),
-                integrationId: integration.id,
-                integrationName: integration.name,
-                title: this.buildTitle(integration, 'available'),
-                status: 'available',
-                mode: 'instruction',
-                query: stepDescription,
-                content: `${integration.name} is available but not connected yet. Go to Integrations, click Connect on ${integration.name}, and then rerun this request. If there are other tasks in this plan that do not depend on ${integration.name}, I can continue with those.`,
                 shouldContinue: true,
                 timestamp: Date.now()
             };

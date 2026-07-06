@@ -1,5 +1,5 @@
 import { Tool } from '../tool-base';
-import { GlobalContext, getContextSummary } from '../context';
+import { GlobalContext } from '../context';
 
 const CONFIRMATION_PATTERNS = [
     /^(ok|okay|k)(?:\s+(please|thanks|thank you))?[.!]*$/i,
@@ -33,6 +33,32 @@ function isConfirmatoryFollowup(userInput: string): boolean {
     return CONFIRMATION_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
+function getGuardrailContextSummary(context: GlobalContext): string {
+    const parts: string[] = [];
+
+    if (context.currentPlan) {
+        parts.push(`Current plan: ${context.currentPlan.objective}`);
+    }
+
+    if (context.dataSets.length > 0) {
+        parts.push(`Own ad datasets available: ${context.dataSets.length}`);
+    }
+
+    if (context.discoveryDataSets.length > 0) {
+        parts.push(`Discovery datasets available: ${context.discoveryDataSets.length}`);
+    }
+
+    if (context.analysisReports.length > 0 || context.creativeReports.length > 0 || context.consolidationReports.length > 0) {
+        parts.push(`Reports available: ${context.analysisReports.length + context.creativeReports.length + context.consolidationReports.length}`);
+    }
+
+    if (context.integrationResults.length > 0) {
+        parts.push(`Integration result cards available: ${context.integrationResults.length}`);
+    }
+
+    return parts.join('\n') || 'No prior analytical context.';
+}
+
 /**
  * Result from guardrail check
  */
@@ -61,6 +87,12 @@ class GuardrailToolWrapper extends Tool {
 2. **PII Check**: Check for sensitive Personal Identifiable Information
 3. **Relevance Check**: Ensure input relates to Marketing, Advertising, or Data Analysis
 4. **Planning Decision**: Determine if the request needs analytical planning or can be answered directly
+
+## CONNECTION STATE IS NOT A GUARDRAIL
+- Do not reject requests because an integration, ad account, data source, Slack, Notion, or workspace connection is missing.
+- Connection availability is handled later by planning and tools.
+- If a relevant marketing request needs a disconnected integration, pass the request and set needsPlanning to true.
+- Evaluate only the user's intent, safety, PII, relevance, and whether planning is needed.
 
 ## WHEN TO SKIP PLANNING (needsPlanning: false)
 - Simple greetings: "Hi", "Hello", "How are you"
@@ -111,7 +143,7 @@ Output: {"passed": false, "needsPlanning": false, "directResponse": null, "viola
             return { passed: true, needsPlanning: true };
         }
 
-        const contextSummary = getContextSummary(context);
+        const contextSummary = getGuardrailContextSummary(context);
         
         const input = `
 USER INPUT: ${userInput}

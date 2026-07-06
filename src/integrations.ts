@@ -45,6 +45,34 @@ const INTEGRATION_REGISTRY: IntegrationRegistryItem[] = [
         keywords: ['shopify', 'store sales', 'shopify sales', 'shopify products']
     },
     {
+        id: 'slack',
+        name: 'Slack',
+        availability: 'available',
+        capabilities: ['send summary messages', 'publish updates to channels', 'share task results'],
+        keywords: ['slack', 'slack message', 'channel', 'workspace update', 'send summary']
+    },
+    {
+        id: 'notion',
+        name: 'Notion',
+        availability: 'available',
+        capabilities: ['create pages', 'update documents', 'publish task summaries'],
+        keywords: ['notion', 'notion page', 'workspace doc', 'document']
+    },
+    {
+        id: 'google_drive',
+        name: 'Google Drive',
+        availability: 'available',
+        capabilities: ['create files', 'update documents', 'save generated reports'],
+        keywords: ['google drive', 'drive', 'docs', 'document', 'file']
+    },
+    {
+        id: 'clickup',
+        name: 'ClickUp',
+        availability: 'available',
+        capabilities: ['create tasks', 'update tasks', 'publish action items'],
+        keywords: ['clickup', 'click up', 'task', 'project management']
+    },
+    {
         id: 'hubspot',
         name: 'HubSpot',
         availability: 'coming_soon',

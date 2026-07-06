@@ -100,6 +100,7 @@ const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
 		try {
 			if (connectableIntegrationId && integration.integration) {
 				await onIntegrationDisconnect(connectableIntegrationId);
+				await onDisconnectIntegration(integration.id);
 				await onRefreshIntegrations();
 			} else {
 				await onDisconnectIntegration(integration.id);

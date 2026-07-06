@@ -12,7 +12,7 @@
             "name": "NIKE TikTok",
             "platform": "tiktok",
             "account_id": "tiktok_nike_official",
-            "is_connected": true
+            "is_connected": false
         }
     ],
     "ads": [

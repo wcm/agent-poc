@@ -8,7 +8,7 @@ export type NarratorMessageType =
     | 'intro'           // Start of analysis
     | 'step_complete'   // After a tool completes
     | 'transition'      // Between major phases
-    | 'final'           // End of plan with suggestions
+    | 'final'           // End of plan summary
     | 'error';          // When something goes wrong
 
 /**
@@ -34,7 +34,7 @@ export interface NarratorInput {
  * - Intro: What we're about to do
  * - Step complete: Brief update after each step
  * - Transition: Moving between phases
- * - Final: Summary with suggested next actions
+ * - Final: Summary of what happened in the run
  */
 class NarratorToolWrapper extends Tool {
     constructor() {
@@ -61,11 +61,11 @@ Examples:
 - "Creative analysis complete for your top ads. Now examining your underperformers to find the differences..."
 
 ### FINAL
-Summary (1-2 sentences) with a SPECIFIC suggested next action or question.
+Summary (1-2 sentences) of what happened in the run. Do not suggest next actions or ask follow-up questions.
 Examples:
-- "Based on this analysis, your video hooks outperform images by 40%. Would you like me to analyze what makes your video intros effective?"
-- "I found that urgency messaging drives 2x higher ROAS. Want me to suggest ways to add urgency to your underperforming ads?"
-- "Your top ads share a 'social proof' pattern. Should I compare these patterns against your TikTok integration?"
+- "Analysis complete: I reviewed the latest performance data, identified the strongest movement, and prepared the requested output."
+- "Run complete: I pulled the relevant ad data, summarized the key performance shifts, and delivered the requested integration action."
+- "Analysis complete: I compared the requested signals and generated a concise summary of the main findings."
 
 ### ERROR
 Friendly error message explaining what went wrong.
@@ -75,7 +75,7 @@ Example: "I couldn't complete the analysis because no data was found for those f
 - Keep messages SHORT (1-2 sentences max)
 - Match the user's original intent
 - Be conversational, not robotic
-- For FINAL messages, ALWAYS suggest a specific follow-up action
+- For FINAL messages, NEVER suggest a follow-up action, next step, or question. The separate run summary handles next suggestions.
 - Don't repeat what's already shown in reports
 - Output ONLY the message text, no formatting`
         });
@@ -140,7 +140,7 @@ Keep it to 1-2 sentences.`;
             case 'final':
                 prompt += `\nAll ${input.totalSteps} steps completed.\n`;
                 prompt += `\nContext summary:\n${getContextSummary(input.context)}\n`;
-                prompt += `\nGenerate a brief summary with a SPECIFIC suggested follow-up action.`;
+                prompt += `\nGenerate a brief summary of what happened in this run only. Do not include next steps, suggestions, offers, or questions.`;
                 break;
                 
             case 'error':
@@ -164,7 +164,7 @@ Keep it to 1-2 sentences.`;
             case 'transition':
                 return "Moving to the next step...";
             case 'final':
-                return "Analysis complete. What would you like to explore next?";
+                return "Analysis complete. I finished the requested run and summarized the key findings.";
             case 'error':
                 return "Something went wrong. Please try again.";
             default:

@@ -7,10 +7,10 @@ import {
     PlanStep,
     UserContext,
     createEmptyContext, 
-    addToHistory,
-    generateId
+    addToHistory
 } from './context';
 import { getConnectedIntegrationInputs, resolveIntegrations } from './integrations';
+import { requireIntegration } from './integration-requirements';
 import { 
     SSEEvent, 
     StreamEmitter, 
@@ -27,9 +27,21 @@ import { creativeInsightsTool } from './tools/creative-insights';
 import { consolidateFindingsTool } from './tools/consolidate-findings';
 import { generateAdVariationsTool } from './tools/generate-ad-variations';
 import { integrationsTool } from './tools/integrations';
+import { integrationActionTool } from './tools/integration-action';
 import { narratorTool } from './tools/narrator';
 import { runMetadataTool } from './tools/run-metadata';
 import { logger } from './utils/logger';
+import { IntegrationResultRecord } from './types';
+
+class RunBlockedError extends Error {
+    result: IntegrationResultRecord;
+
+    constructor(result: IntegrationResultRecord) {
+        super(result.content);
+        this.name = 'RunBlockedError';
+        this.result = result;
+    }
+}
 
 /**
  * Unified Agent
@@ -99,7 +111,7 @@ export class Agent extends EventEmitter {
             name: integrationId,
             platform: 'unknown',
             account_id: '',
-            is_connected: true
+            is_connected: false
         };
     }
 
@@ -248,6 +260,19 @@ export class Agent extends EventEmitter {
                     previousStepResult = result;
 
                 } catch (error: any) {
+                    if (error instanceof RunBlockedError) {
+                        logger.taskEnd('Agent', step.id, 'blocked');
+                        this.stream({
+                            type: 'run_blocked',
+                            reason: 'integration_connection_required',
+                            integrationId: error.result.integrationId,
+                            integrationName: error.result.integrationName,
+                            resultId: error.result.id,
+                            message: error.result.content
+                        });
+                        return;
+                    }
+
                     step.status = 'failed';
                     this.stream({ 
                         type: 'plan_status', 
@@ -302,9 +327,140 @@ export class Agent extends EventEmitter {
         }
     }
 
+    async resumeAfterConnection(integrationId: string, userContext?: UserContext): Promise<void> {
+        const plan = this.context.currentPlan;
+
+        if (!plan) {
+            this.stream({ type: 'error', message: 'No paused task found to resume.' });
+            this.stream({ type: 'done' });
+            return;
+        }
+
+        try {
+            const connectedIntegrationInputs = userContext?.integrations || getConnectedIntegrationInputs(this.context.integrations);
+            this.context.integrations = resolveIntegrations(connectedIntegrationInputs);
+            if (userContext?.brands) {
+                this.context.followedBrands = userContext.brands;
+            }
+
+            const resumeIndex = plan.steps.findIndex((step) => step.status !== 'completed');
+            if (resumeIndex < 0) {
+                this.stream({ type: 'done' });
+                return;
+            }
+
+            const userInput = this.context.userInput;
+            this.stream({ type: 'text', content: `${this.getIntegrationDisplayName(integrationId)} connected. Continuing the task...` });
+
+            let previousStep: PlanStep | null = resumeIndex > 0 ? plan.steps[resumeIndex - 1] : null;
+            let previousStepResult = '';
+
+            for (let i = resumeIndex; i < plan.steps.length; i++) {
+                const step = plan.steps[i];
+
+                const transitionMessage = await this.generateStepTransition(
+                    step, previousStep, previousStepResult, i, plan.steps.length, userInput
+                );
+                if (transitionMessage) {
+                    this.stream({ type: 'text', content: transitionMessage });
+                }
+
+                step.status = 'running';
+                this.stream({
+                    type: 'plan_status',
+                    planId: plan.id,
+                    taskId: step.id,
+                    status: 'running'
+                });
+
+                try {
+                    const result = await this.executeStep(step);
+
+                    step.status = 'completed';
+                    this.stream({
+                        type: 'plan_status',
+                        planId: plan.id,
+                        taskId: step.id,
+                        status: 'completed',
+                        result: result.substring(0, 100)
+                    });
+
+                    logger.taskEnd('Agent', step.id, 'completed');
+                    previousStep = step;
+                    previousStepResult = result;
+                } catch (error: any) {
+                    if (error instanceof RunBlockedError) {
+                        logger.taskEnd('Agent', step.id, 'blocked');
+                        this.stream({
+                            type: 'run_blocked',
+                            reason: 'integration_connection_required',
+                            integrationId: error.result.integrationId,
+                            integrationName: error.result.integrationName,
+                            resultId: error.result.id,
+                            message: error.result.content
+                        });
+                        return;
+                    }
+
+                    step.status = 'failed';
+                    this.stream({
+                        type: 'plan_status',
+                        planId: plan.id,
+                        taskId: step.id,
+                        status: 'failed'
+                    });
+                    throw error;
+                }
+            }
+
+            const finalMessage = await narratorTool.generate({
+                type: 'final',
+                userInput,
+                planObjective: plan.objective,
+                completedSteps: plan.steps.filter(s => s.status === 'completed').length,
+                totalSteps: plan.steps.length,
+                context: this.context
+            });
+            if (finalMessage) {
+                this.stream({ type: 'text', content: finalMessage });
+            }
+
+            addToHistory(this.context, 'user', userInput);
+            addToHistory(this.context, 'assistant', finalMessage || `Completed analysis: ${plan.objective}`);
+
+            await this.emitRunSummary(userInput);
+            this.stream({ type: 'done' });
+        } catch (error: any) {
+            logger.log('ERROR', { component: 'Agent', action: 'RESUME' }, error.message);
+            this.stream({ type: 'error', message: error.message });
+            this.stream({ type: 'text', content: `Something went wrong while resuming: ${error.message}` });
+            this.stream({ type: 'done' });
+        }
+    }
+
     private async emitRunSummary(userInput: string): Promise<void> {
         const summary = await runMetadataTool.generateSummary(userInput, this.context);
         this.stream({ type: 'run_summary', summary });
+    }
+
+    private getIntegrationDisplayName(integrationId: string): string {
+        return this.context.integrations.find((integration) => integration.id === integrationId)?.name || integrationId;
+    }
+
+    private emitIntegrationResult(result: IntegrationResultRecord): void {
+        this.stream({
+            type: 'integration_result',
+            resultId: result.id,
+            integrationId: result.integrationId,
+            integrationName: result.integrationName,
+            title: result.title,
+            status: result.status,
+            mode: result.mode,
+            actionStatus: result.actionStatus,
+            isBlocking: result.isBlocking,
+            canConnect: result.canConnect,
+            content: result.content
+        });
     }
 
     /**
@@ -347,6 +503,20 @@ export class Agent extends EventEmitter {
 
         switch (step.tool) {
             case 'dataQuery': {
+                const requirement = requireIntegration(this.context, {
+                    integrationId: this.context.integration.id,
+                    fallbackIntegration: this.context.integration,
+                    mode: 'instruction',
+                    query: 'Data query requires a connected integration',
+                    purpose: 'query ad performance data'
+                });
+
+                if (requirement.block) {
+                    this.context.integrationResults.push(requirement.block);
+                    this.emitIntegrationResult(requirement.block);
+                    throw new RunBlockedError(requirement.block);
+                }
+
                 const result = await dataQueryTool.execute(step.description, this.context);
                 this.stream({ type: 'text', content: result.message });
                 return result.message;
@@ -403,16 +573,19 @@ export class Agent extends EventEmitter {
 
             case 'integrations': {
                 const result = await integrationsTool.execute(step.description, this.context);
-                this.stream({
-                    type: 'integration_result',
-                    resultId: result.result.id,
-                    integrationId: result.result.integrationId,
-                    integrationName: result.result.integrationName,
-                    title: result.result.title,
-                    status: result.result.status,
-                    mode: result.result.mode,
-                    content: result.result.content
-                });
+                this.emitIntegrationResult(result.result);
+                if (!result.result.shouldContinue) {
+                    throw new RunBlockedError(result.result);
+                }
+                return result.result.title;
+            }
+
+            case 'integrationAction': {
+                const result = await integrationActionTool.execute(step.description, this.context);
+                this.emitIntegrationResult(result.result);
+                if (!result.result.shouldContinue) {
+                    throw new RunBlockedError(result.result);
+                }
                 return result.result.title;
             }
 

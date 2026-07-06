@@ -87,6 +87,25 @@ const clampWords = (value: string, maxWords: number) =>
         .slice(0, maxWords)
         .join(' ');
 
+const extractExplicitTaskName = (userInput: string): string | null => {
+    const match = userInput.match(/Task name\s*:\s*([^\r\n]+)/i);
+    if (!match) {
+        return null;
+    }
+
+    const rawNameLine = match[1].trim();
+    const sentenceMatch = rawNameLine.match(/^(.+?)([.!?])(?=\s+[A-Z]|\s*$)/);
+    const rawName = sentenceMatch
+        ? `${sentenceMatch[1]}${sentenceMatch[2] === '?' || sentenceMatch[2] === '!' ? sentenceMatch[2] : ''}`
+        : rawNameLine;
+    const taskName = rawName
+        .replace(/^["']|["']$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    return taskName || null;
+};
+
 const buildFallbackTitle = (userInput: string) => clampWords(userInput, 5) || 'Marketing Analysis';
 
 const unique = (values: string[]) => {
@@ -194,6 +213,11 @@ const normalizeNextSteps = (value: unknown): RunNextStep[] => {
 
 class RunMetadataTool {
     async generateTitle(userInput: string): Promise<string> {
+        const explicitTaskName = extractExplicitTaskName(userInput);
+        if (explicitTaskName) {
+            return explicitTaskName;
+        }
+
         try {
             titleTool.clearHistory();
             const response = await titleTool.process(`Task request:\n${userInput}`);

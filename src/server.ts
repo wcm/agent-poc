@@ -212,6 +212,49 @@ app.get('/api/stream', async (req: Request, res: Response) => {
     }
 });
 
+app.get('/api/stream/resume', async (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const sessionId = (req.query.sessionId as string) || 'default';
+    const integrationId = req.query.integrationId as string;
+
+    let userContext: UserContext | undefined;
+    if (req.query.context) {
+        try {
+            userContext = JSON.parse(req.query.context as string);
+        } catch (e) {
+            logger.log('WARN', { component: 'Server', action: 'PARSE_CONTEXT' }, 'Failed to parse resume context');
+        }
+    }
+
+    if (!integrationId) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: "Integration required" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+        res.end();
+        return;
+    }
+
+    const agent = getAgent(sessionId);
+
+    const onStream = (event: any) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    agent.on('stream', onStream);
+
+    try {
+        await agent.resumeAfterConnection(integrationId, userContext);
+    } catch (error: any) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+    } finally {
+        agent.off('stream', onStream);
+        res.end();
+    }
+});
+
 app.post('/api/clear', (req: Request, res: Response) => {
     const sessionId = req.body?.sessionId;
     if (sessionId && agents.has(sessionId)) {
@@ -270,7 +313,7 @@ app.post('/api/files/generated-image-ads/generate', async (req: Request, res: Re
             name: integrationId,
             platform: 'unknown',
             account_id: '',
-            is_connected: true
+            is_connected: false
         };
 
         const imageAds = ((analytics.ads || []) as AdData[])

@@ -24,6 +24,8 @@ export interface BrandInfo {
 
 export type IntegrationAvailability = 'available' | 'coming_soon';
 export type IntegrationStatus = 'connected' | 'available' | 'coming_soon';
+export type IntegrationResultMode = 'data' | 'instruction' | 'action';
+export type IntegrationActionStatus = 'completed' | 'connection_required' | 'unavailable' | 'unknown';
 
 export interface FrontendIntegrationInfo {
     id: string;
@@ -45,7 +47,10 @@ export interface IntegrationResultRecord {
     integrationName: string;
     title: string;
     status: IntegrationStatus | 'unknown';
-    mode: 'data' | 'instruction';
+    mode: IntegrationResultMode;
+    actionStatus?: IntegrationActionStatus;
+    isBlocking?: boolean;
+    canConnect?: boolean;
     query: string;
     content: string;
     shouldContinue: boolean;
@@ -143,8 +148,21 @@ export interface IntegrationResultEvent {
     integrationName: string;
     title: string;
     status: IntegrationStatus | 'unknown';
-    mode: 'data' | 'instruction';
+    mode: IntegrationResultMode;
+    actionStatus?: IntegrationActionStatus;
+    isBlocking?: boolean;
+    canConnect?: boolean;
     content: string;
+}
+
+// Run blocked event - stream is paused while the user connects an integration
+export interface RunBlockedEvent {
+    type: 'run_blocked';
+    reason: 'integration_connection_required';
+    integrationId: string;
+    integrationName: string;
+    resultId: string;
+    message: string;
 }
 
 // Focused items event - ad/creative cards
@@ -239,6 +257,7 @@ export type SSEEvent =
     | FocusedItemsEvent 
     | ContextUpdateEvent 
     | RunSummaryEvent
+    | RunBlockedEvent
     | DoneEvent
     | ErrorEvent
     | ImageConceptsEvent

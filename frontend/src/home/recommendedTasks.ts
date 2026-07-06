@@ -23,7 +23,7 @@ export const RECOMMENDED_HOME_TASKS: RecommendedTask[] = [
 		description: "The fastest way to spot emerging winners, react to fresh trend shifts, and send a concise launch readout to Slack.",
 		icon: "launch",
 		prompt:
-			"Task name: Last 7 Days Launch Analysis.\n\nAnalyze the latest available 7-day launch window of Nike ad performance to identify the newest emerging winners, fast-declining ads, and creative trends that need action. Use the most recent Nike ad data available in the connected Meta account rather than inventing calendar dates. Prioritize the latest shifts so the team can react quickly. At the end of the task, send a concise summary message to Slack with the key findings, risks, and next actions instead of only preparing a draft.",
+			"Task name: Last 7 Days Launch Analysis.\n\nAnalyze the latest available 7-day launch window of ad performance in the Meta Ads account. Identify the newest emerging winners, fast-declining ads, and creative trends that need action. Use the most recent Meta Ads data available rather than inventing calendar dates. Prioritize the latest shifts so the team can react quickly.\n\nDelivery requirement: send the final concise summary message to Slack with the key findings, risks, and next actions instead of only preparing a draft. The delivery integration is Slack, not the ad data source.",
 	},
 	{
 		id: "ad-account-audit",

@@ -10,13 +10,18 @@ import BrandContextPage from "../BrandContext/BrandContextPage";
 import IntegrationsPage from "../Integrations/IntegrationsPage";
 import AutomationsPage from "../Automations/AutomationsPage";
 import FilesPage from "../Files/FilesPage";
+import Home2Page from "../Home2/Home2Page";
 import { AutomationDefinition, AUTOMATION_STATE_STORAGE_KEY, getInitialAutomations, mergePersistedAutomations } from "../../automations/catalog";
+import type { Home2SectionId } from "../../home/home2Tasks";
 import {
 	getConnectedIntegrations,
+	getConnectableIntegrationId,
 	getInitialIntegrationState,
+	getIntegrationDefinitionById,
 	INTEGRATION_STATE_STORAGE_KEY,
 	IntegrationState,
 	resolveIntegrations,
+	ResolvedIntegration,
 } from "../../integrations/catalog";
 
 type SeedConversationEntry = Pick<Message, "role" | "content">;
@@ -24,6 +29,13 @@ type SeedConversationEntry = Pick<Message, "role" | "content">;
 interface SendMessageOptions {
 	forceNewSession?: boolean;
 	stayOnHome?: boolean;
+	targetRayaView?: RayaView;
+	home2Run?: {
+		surface?: "home2" | "home3";
+		sectionId: Home2SectionId;
+		taskId: string;
+		taskIndex: number;
+	};
 	seedMessages?: Message[];
 	seedConversationHistory?: SeedConversationEntry[];
 }
@@ -329,6 +341,41 @@ const MainLayout: React.FC = () => {
 		}));
 	}, []);
 
+	const getAgentIntegrationContext = useCallback(
+		(forceConnectedIntegrationId?: string) => {
+			const effectiveIntegrationState = forceConnectedIntegrationId
+				? { ...integrationState, [forceConnectedIntegrationId]: true }
+				: integrationState;
+			const resolved = resolveIntegrations(integrations, effectiveIntegrationState);
+			const connected = resolved.filter((integration) => integration.isConnected);
+			const connectedDataSources = connected.filter((integration) => integration.section === "dataSources");
+			const effectiveSelectedIntegrationIds =
+				selectedIntegrationIds.length > 0 ? selectedIntegrationIds : connectedDataSources.map((integration) => integration.id);
+			const selectedAliases = new Set(effectiveSelectedIntegrationIds);
+			const selectedDataSources = connectedDataSources.filter(
+				(integration) => selectedAliases.has(integration.id) || (integration.integration ? selectedAliases.has(integration.integration.id) : false)
+			);
+			const connectedActionIntegrations = connected.filter((integration) => integration.section !== "dataSources");
+			const uniqueIntegrations: ResolvedIntegration[] = [];
+			const seenIntegrationIds = new Set<string>();
+
+			[...selectedDataSources, ...connectedActionIntegrations].forEach((integration) => {
+				if (seenIntegrationIds.has(integration.id)) {
+					return;
+				}
+				seenIntegrationIds.add(integration.id);
+				uniqueIntegrations.push(integration);
+			});
+
+			return uniqueIntegrations.map((integration) => ({
+				id: integration.id,
+				name: integration.name,
+				status: "connected" as const,
+			}));
+		},
+		[integrations, integrationState, selectedIntegrationIds]
+	);
+
 	const handleSaveAutomation = useCallback((automation: AutomationDefinition) => {
 		setAutomations((prev) => prev.map((item) => (item.id === automation.id ? automation : item)));
 	}, []);
@@ -439,6 +486,9 @@ const MainLayout: React.FC = () => {
 						title: event.title,
 						status: event.status,
 						mode: event.mode,
+						actionStatus: event.actionStatus,
+						isBlocking: event.isBlocking,
+						canConnect: event.canConnect,
 						content: event.content,
 					};
 
@@ -446,6 +496,16 @@ const MainLayout: React.FC = () => {
 						...session,
 						lastActivityAt: eventTimestamp,
 						streamingSections: [...session.streamingSections, section],
+						isRead: visible ? true : session.isRead,
+					}));
+					break;
+				}
+
+				case "run_blocked": {
+					updateSession(currentSessionId, (session) => ({
+						...session,
+						lastActivityAt: eventTimestamp,
+						status: "running",
 						isRead: visible ? true : session.isRead,
 					}));
 					break;
@@ -611,7 +671,7 @@ const MainLayout: React.FC = () => {
 		context?: { integration?: Integration; brands?: Brand[] },
 		options?: SendMessageOptions
 	) => {
-		setActiveRayaView("tasks");
+		setActiveRayaView(options?.targetRayaView ?? "tasks");
 		setActiveAutomationId(null);
 		setActiveAutomationMode("overview");
 		const userMessage: Message = { role: "user", content };
@@ -634,6 +694,7 @@ const MainLayout: React.FC = () => {
 				completedAt: null,
 				streamingSections: [],
 				planTaskStates: {},
+				home2Run: options?.home2Run,
 			};
 
 			setSessions((prev) => [...prev, newSession]);
@@ -659,6 +720,7 @@ const MainLayout: React.FC = () => {
 				summary: undefined,
 				streamingSections: [],
 				planTaskStates: {},
+				home2Run: options?.home2Run ?? session.home2Run,
 			}));
 		}
 
@@ -674,19 +736,7 @@ const MainLayout: React.FC = () => {
 		const sessionParam = `&sessionId=${encodeURIComponent(sessionId)}`;
 
 		let contextParam = "";
-		const effectiveSelectedIntegrationIds =
-			selectedIntegrationIds.length > 0
-				? selectedIntegrationIds
-				: connectedIntegrations.filter((integration) => integration.section === "dataSources").map((integration) => integration.id);
-		const selectedIntegrationAliases = new Set(effectiveSelectedIntegrationIds);
-		const selectedResolvedIntegrations = connectedIntegrations.filter(
-			(integration) => selectedIntegrationAliases.has(integration.id) || (integration.integration ? selectedIntegrationAliases.has(integration.integration.id) : false)
-		);
-		const integrationContext = selectedResolvedIntegrations.map((integration) => ({
-			id: integration.id,
-			name: integration.name,
-			status: "connected" as const,
-		}));
+		const integrationContext = getAgentIntegrationContext();
 		const contextData = {
 			integration: context?.integration ?? mockIntegration,
 			brands: context?.brands,
@@ -704,7 +754,7 @@ const MainLayout: React.FC = () => {
 				const data = JSON.parse(messageEvent.data) as SSEEvent;
 				handleSSEEvent(data, sessionId);
 
-				if (data.type === "done") {
+				if (data.type === "done" || data.type === "run_blocked") {
 					closeSessionStream(sessionId);
 				}
 			} catch (err) {
@@ -745,6 +795,160 @@ const MainLayout: React.FC = () => {
 			forceNewSession: true,
 			stayOnHome: true,
 		});
+	};
+
+	const handleRunHome2Task = async (sectionId: Home2SectionId, taskIndex: number, prompt: string, taskId?: string) => {
+		await handleSendMessage(prompt, undefined, {
+			forceNewSession: true,
+			stayOnHome: true,
+			targetRayaView: "home2",
+			home2Run: {
+				surface: "home2",
+				sectionId,
+				taskId: taskId ?? `${sectionId}-${taskIndex}`,
+				taskIndex,
+			},
+		});
+	};
+
+	const handleRunHome2ComposerMessage = async (prompt: string) => {
+		await handleSendMessage(prompt, undefined, {
+			forceNewSession: true,
+			stayOnHome: true,
+			targetRayaView: "home2",
+		});
+	};
+
+	const handleRunHome3Task = async (sectionId: Home2SectionId, taskIndex: number, prompt: string, taskId?: string) => {
+		await handleSendMessage(prompt, undefined, {
+			forceNewSession: true,
+			stayOnHome: true,
+			targetRayaView: "home3",
+			home2Run: {
+				surface: "home3",
+				sectionId,
+				taskId: taskId ?? `${sectionId}-${taskIndex}`,
+				taskIndex,
+			},
+		});
+	};
+
+	const handleRunHome3ComposerMessage = async (prompt: string) => {
+		await handleSendMessage(prompt, undefined, {
+			forceNewSession: true,
+			stayOnHome: true,
+			targetRayaView: "home3",
+		});
+	};
+
+	const resumeBlockedSession = (sessionId: string, integrationId: string) => {
+		closeSessionStream(sessionId);
+
+		const mockIntegration = integrations.find((integration) => integration.id === "meta_ads") || integrations[0];
+		const sessionParam = `&sessionId=${encodeURIComponent(sessionId)}`;
+		const integrationParam = `&integrationId=${encodeURIComponent(integrationId)}`;
+		const contextData = {
+			integration: mockIntegration,
+			integrations: getAgentIntegrationContext(integrationId),
+		};
+		const contextParam = `&context=${encodeURIComponent(JSON.stringify(contextData))}`;
+		const apiUrl = `${baseUrl}/api/stream/resume?${sessionParam.slice(1)}${integrationParam}${contextParam}`;
+		const eventSource = new EventSource(apiUrl);
+		eventSourcesRef.current.set(sessionId, eventSource);
+
+		eventSource.onmessage = (messageEvent) => {
+			try {
+				const data = JSON.parse(messageEvent.data) as SSEEvent;
+				handleSSEEvent(data, sessionId);
+
+				if (data.type === "done" || data.type === "run_blocked") {
+					closeSessionStream(sessionId);
+				}
+			} catch (err) {
+				console.error("Failed to parse resume SSE event:", err);
+			}
+		};
+
+		eventSource.onerror = (err) => {
+			console.error("Resume EventSource failed:", err);
+			if (!eventSourcesRef.current.has(sessionId)) {
+				return;
+			}
+
+			closeSessionStream(sessionId);
+			updateSession(sessionId, (session) => {
+				if (session.status !== "running") {
+					return session;
+				}
+
+				const fallbackSections =
+					session.streamingSections.length > 0
+						? session.streamingSections
+						: [{ type: "text", content: "⚠️ Error: Connection resume interrupted before the task completed." } as StreamedSection];
+
+				return {
+					...session,
+					lastActivityAt: Date.now(),
+					status: "failed",
+					isRead: isSessionVisible(sessionId) ? true : session.isRead,
+					streamingSections: fallbackSections,
+				};
+			});
+		};
+	};
+
+	const handleConnectRequiredIntegration = async (sessionId: string, integrationId: string) => {
+		const definition = getIntegrationDefinitionById(integrationId);
+		const backendIntegrationId = definition ? getConnectableIntegrationId(definition) : null;
+
+		try {
+			if (backendIntegrationId) {
+				await handleIntegrationConnect(backendIntegrationId);
+				setIntegrationState((prev) => ({
+					...prev,
+					[integrationId]: true,
+				}));
+				await fetchIntegrations();
+			} else {
+				handleIntegrationStateConnect(integrationId);
+			}
+
+			const markIntegrationCardsConnected = (sections: StreamedSection[]): StreamedSection[] =>
+				sections.map((section) => {
+					if (section.type !== "integration_result" || section.integrationId !== integrationId || section.status === "connected") {
+						return section;
+					}
+
+					const integrationName = section.integrationName || definition?.name || integrationId;
+					return {
+						...section,
+						integrationName,
+						title: `${integrationName} connected`,
+						status: "connected" as const,
+						actionStatus: "completed" as const,
+						isBlocking: false,
+						canConnect: false,
+						content: `${integrationName} connected. Continuing the task...`,
+					};
+				});
+
+			updateSession(sessionId, (session) => ({
+				...session,
+				lastActivityAt: Date.now(),
+				status: "running",
+				messages: session.messages.map((message) => (message.sections ? { ...message, sections: markIntegrationCardsConnected(message.sections) } : message)),
+				streamingSections: [
+					...markIntegrationCardsConnected(session.streamingSections),
+					{
+						type: "text",
+						content: `${definition?.name ?? integrationId} connected. Resuming the task...`,
+					},
+				],
+			}));
+			resumeBlockedSession(sessionId, integrationId);
+		} catch (error) {
+			console.error("Failed to connect required integration:", error);
+		}
 	};
 
 	const handleTestAutomation = async (prompt: string) => {
@@ -833,6 +1037,18 @@ const MainLayout: React.FC = () => {
 							onTestAutomation={handleTestAutomation}
 							onContinueAutomationRun={handleContinueAutomationRun}
 						/>
+					) : activeRayaView === "home2" || activeRayaView === "home3" ? (
+						<Home2Page
+							sessions={sessions}
+							onRunTask={activeRayaView === "home3" ? handleRunHome3Task : handleRunHome2Task}
+							onRunComposerMessage={activeRayaView === "home3" ? handleRunHome3ComposerMessage : handleRunHome2ComposerMessage}
+							onSessionSelect={handleSessionSelect}
+							onConnectRequiredIntegration={handleConnectRequiredIntegration}
+							onOpenBrandContext={() => setActiveRayaView("brandContext")}
+							activeBrand={activeBrand}
+							surface={activeRayaView}
+							layout={activeRayaView === "home3" ? "tabs" : "sections"}
+						/>
 					) : (
 						<ChatInterface
 							sessionId={activeSessionId}
@@ -844,6 +1060,7 @@ const MainLayout: React.FC = () => {
 							onSendMessage={handleSendMessage}
 							onRunHomeTask={handleRunHomeTask}
 							onSessionSelect={handleSessionSelect}
+							onConnectRequiredIntegration={handleConnectRequiredIntegration}
 							onSetupAutomation={() => {
 								setActiveAutomationId(null);
 								setActiveAutomationMode("overview");

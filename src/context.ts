@@ -163,7 +163,7 @@ export interface GenerationResult {
  */
 export interface PlanStep {
     id: string;
-    tool: 'dataQuery' | 'dataAnalysis' | 'focusItems' | 'creativeInsights' | 'consolidateFindings' | 'discoveryQuery' | 'generateAdVariations' | 'integrations';
+    tool: 'dataQuery' | 'dataAnalysis' | 'focusItems' | 'creativeInsights' | 'consolidateFindings' | 'discoveryQuery' | 'generateAdVariations' | 'integrations' | 'integrationAction';
     description: string;
     status: TaskStatus;
 }

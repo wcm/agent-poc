@@ -3,6 +3,8 @@ import { GlobalContext, FocusItemSet, getLatestAnyDataSet, generateId, AdData, D
 import { FocusedItemCard } from '../types';
 import { logger } from '../utils/logger';
 
+const MAX_FOCUS_ITEMS = 3;
+
 /**
  * FocusItems Tool Result
  */
@@ -37,12 +39,13 @@ Return a JSON object:
 }
 
 ## SELECTION RULES
-1. If "top N" is requested, select the first N items (data is pre-sorted)
-2. If "worst/bottom N" is requested, select from the end (or first N if sorted ascending)
-3. Default to selecting 3-5 items unless specified otherwise
-4. If the task is about generating ad variations, ad concepts, or new creatives and no count is specified, default to selecting 1 item
-5. Match the user's intent from the task description
-6. Return actual IDs from the data (don't make them up)
+1. Select at most 3 items. If "top N", "worst N", "all", or a larger count is requested, cap the selection at 3.
+2. If "top N" is requested, select the first N items up to the 3-item cap (data is pre-sorted)
+3. If "worst/bottom N" is requested, select from the end up to the 3-item cap (or first N if sorted ascending)
+4. Default to selecting 3 items unless specified otherwise
+5. If the task is about generating ad variations, ad concepts, or new creatives and no count is specified, default to selecting 1 item
+6. Match the user's intent from the task description
+7. Return actual IDs from the data (don't make them up)
 
 ## EXAMPLES
 
@@ -55,7 +58,7 @@ Data sorted by ROAS ASC
 → Select first 3 items (lowest ROAS)
 
 Task: "Select top 5 video ads"
-→ Select first 5 items (assuming data is filtered to videos)`
+→ Select first 3 items (assuming data is filtered to videos, capped at 3)`
         });
     }
 
@@ -122,15 +125,16 @@ Select the appropriate items based on the task.
                 } else {
                     // Default fallback - select first 3
                     selection = {
-                        selectedIds: dataSet.data.slice(0, 3).map((d: any) => d.id),
-                        summary: `Top ${Math.min(3, dataSet.data.length)} items`,
+                        selectedIds: dataSet.data.slice(0, MAX_FOCUS_ITEMS).map((d: any) => d.id),
+                        summary: `Top ${Math.min(MAX_FOCUS_ITEMS, dataSet.data.length)} items`,
                         selectionReason: 'Default selection'
                     };
                 }
             }
 
             // Find selected items in dataset
-            const selectedItems = this.findSelectedItems(selection.selectedIds, dataSet.data as any[], isDiscovery);
+            const cappedSelectedIds = Array.isArray(selection.selectedIds) ? selection.selectedIds.slice(0, MAX_FOCUS_ITEMS) : [];
+            const selectedItems = this.findSelectedItems(cappedSelectedIds, dataSet.data as any[], isDiscovery).slice(0, MAX_FOCUS_ITEMS);
             
             // Convert to FocusedItemCard format
             const focusedCards: FocusedItemCard[] = selectedItems.map(item => {
@@ -184,7 +188,7 @@ Select the appropriate items based on the task.
             logger.log('ERROR', { component: 'FocusItemsTool', action: 'SELECT' }, String(error));
             
             // Fallback: select first 3 items
-            const fallbackItems = dataSet.data.slice(0, 3) as any[];
+            const fallbackItems = dataSet.data.slice(0, MAX_FOCUS_ITEMS) as any[];
             const focusedCards: FocusedItemCard[] = fallbackItems.map(item => {
                 if (isDiscovery) {
                     return {
@@ -262,10 +266,10 @@ Select the appropriate items based on the task.
         
         // If no matches found, return first N items
         if (result.length === 0) {
-            return data.slice(0, Math.min(selectedIds.length || 3, data.length));
+            return data.slice(0, Math.min(selectedIds.length || MAX_FOCUS_ITEMS, MAX_FOCUS_ITEMS, data.length));
         }
         
-        return result;
+        return result.slice(0, MAX_FOCUS_ITEMS);
     }
 
     /**
