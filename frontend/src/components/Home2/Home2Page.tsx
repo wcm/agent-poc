@@ -1,22 +1,38 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, BarChart3, ChevronLeft, ChevronRight, Clock, FileText, Heart, Image as ImageIcon, Lightbulb, Paperclip, Plug, Search, Settings, Sparkles, Target } from "lucide-react";
+import { AlertTriangle, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Clock, FileText, Heart, Image as ImageIcon, Lightbulb, Paperclip, Plug, Search, Settings, Sparkles, Target } from "lucide-react";
 import { HOME2_SECTIONS, Home2Section, Home2SectionId, Home2Task } from "../../home/home2Tasks";
-import { RunSummary, Session, StreamedSection } from "../../types";
+import { FocusedItemCard, RunSummary, Session, StreamedSection, SummaryChart, SummaryCreative, SummaryLayout } from "../../types";
 import { getIntegrationDefinitionById } from "../../integrations/catalog";
-import { findBrandContext, getBrandContext, getBrandContextCompletionScore, getBrandContextPrimaryLogo } from "../../brandContext/catalog";
+import { findBrandContext, getBrandContext, getBrandContextPrimaryLogo } from "../../brandContext/catalog";
 import BrandLogoMark from "../BrandContext/BrandLogoMark";
 import rayaThinkingGif from "../../assets/raya-thinking.gif";
 
 interface Home2PageProps {
 	sessions: Session[];
-	onRunTask: (sectionId: Home2SectionId, taskIndex: number, prompt: string, taskId?: string) => void;
+	onRunTask: (
+		sectionId: Home2SectionId,
+		taskIndex: number,
+		prompt: string,
+		taskId?: string,
+		summaryLayout?: SummaryLayout,
+		sourceSessionId?: string
+	) => Promise<string | null> | string | null | void;
 	onRunComposerMessage: (message: string) => void;
 	onSessionSelect: (sessionId: string) => void;
 	onConnectRequiredIntegration?: (sessionId: string, integrationId: string) => Promise<void> | void;
 	onOpenBrandContext: () => void;
 	activeBrand: string;
+	isBrandGuidelinesConnected?: boolean;
 	surface?: "home2" | "home3";
 	layout?: "sections" | "tabs";
+	initialTabbedSectionId?: Home2SectionId;
+	highlightSectionId?: Home2SectionId;
+	singleTaskMode?: {
+		sectionId: Home2SectionId;
+		taskIndex: number;
+		sessionId?: string | null;
+		sourceSessionId?: string;
+	};
 }
 
 type IntegrationResultSection = Extract<StreamedSection, { type: "integration_result" }>;
@@ -36,6 +52,11 @@ const COMPOSER_OVERLAY_ITEMS = [
 	{ id: "reports", label: "Reports", icon: FileText },
 	{ id: "following-brand", label: "Following Brand", icon: Heart },
 ];
+
+const CHART_COLORS = ["#f97316", "#0f172a", "#14b8a6", "#8b5cf6", "#64748b"];
+const LINE_CHART_WIDTH = 260;
+const LINE_CHART_HEIGHT = 128;
+const LINE_CHART_VERTICAL_PADDING = 10;
 
 const formatTaskTimestamp = (value: number | null) => {
 	if (!value) {
@@ -136,6 +157,56 @@ const getGeneratedDocuments = (session: Session) => {
 	return documents;
 };
 
+const getSummaryAdCards = (session: Session) => {
+	const cards: FocusedItemCard[] = [];
+	const seen = new Set<string>();
+	const addCard = (card: FocusedItemCard) => {
+		if (seen.has(card.id)) {
+			return;
+		}
+		seen.add(card.id);
+		cards.push(card);
+	};
+
+	[...getSessionSections(session)].reverse().forEach((section) => {
+		if (section.type === "focused_items") {
+			section.items.forEach(addCard);
+			return;
+		}
+
+		if (section.type === "report" && section.itemName && section.itemData) {
+			addCard({
+				id: section.itemId || section.reportId,
+				name: section.itemName,
+				thumbnail: section.itemData.thumbnail,
+				type: "ad",
+				displayFormat: section.itemData.displayFormat,
+				videoLength: section.itemData.videoLength,
+				metrics: section.itemData.metrics,
+			});
+		}
+	});
+
+	return cards;
+};
+
+const formatCompactCurrency = (value: number) =>
+	new Intl.NumberFormat(undefined, {
+		style: "currency",
+		currency: "USD",
+		notation: value >= 1000 ? "compact" : "standard",
+		maximumFractionDigits: value >= 1000 ? 1 : 0,
+	}).format(value);
+
+const getAdCardMetrics = (item: FocusedItemCard) =>
+	[
+		item.metrics.roas !== undefined ? { label: "ROAS", value: `${item.metrics.roas.toFixed(1)}x` } : null,
+		item.metrics.spend !== undefined ? { label: "Spend", value: formatCompactCurrency(item.metrics.spend) } : null,
+		item.metrics.ctr !== undefined ? { label: "CTR", value: `${item.metrics.ctr.toFixed(1)}%` } : null,
+	]
+		.filter(Boolean)
+		.slice(0, 3) as Array<{ label: string; value: string }>;
+
 const getRunningSessionPlan = (session: Session) => {
 	for (let index = session.streamingSections.length - 1; index >= 0; index -= 1) {
 		const section = session.streamingSections[index];
@@ -235,15 +306,35 @@ const getDisplayInsight = (insight: RunSummary["insights"][number] | string, ind
 	};
 };
 
-const getSectionSessions = (sessions: Session[], sectionId: Home2SectionId, surface: "home2" | "home3") =>
+const renderSummaryError = (summary: RunSummary) => {
+	if (!summary.error) {
+		return null;
+	}
+
+	return (
+		<div className="home2-summary-error" role="alert">
+			<div className="home2-summary-error-header">
+				<AlertTriangle size={18} />
+				<div>
+					<h4>{summary.error.title}</h4>
+					<p>{summary.error.message}</p>
+				</div>
+			</div>
+			{summary.error.details && <p className="home2-summary-error-details">{summary.error.details}</p>}
+			{summary.error.rawResponse && (
+				<details className="home2-summary-error-raw">
+					<summary>Raw summary response</summary>
+					<pre>{summary.error.rawResponse}</pre>
+				</details>
+			)}
+		</div>
+	);
+};
+
+const getSectionSessions = (sessions: Session[], sectionId: Home2SectionId) =>
 	sessions
 		.filter((session) => {
-			if (session.home2Run?.sectionId !== sectionId) {
-				return false;
-			}
-
-			const sessionSurface = session.home2Run.surface ?? "home2";
-			return sessionSurface === surface;
+			return session.home2Run?.sectionId === sectionId;
 		})
 		.sort((a, b) => (b.lastActivityAt ?? b.createdAt) - (a.lastActivityAt ?? a.createdAt));
 
@@ -262,6 +353,56 @@ const getNextPredefinedTaskIndex = (section: Home2Section, sectionSessions: Sess
 	return nextIndex < section.tasks.length ? nextIndex : null;
 };
 
+const buildDonutGradient = (points: SummaryChart["points"]) => {
+	const total = points.reduce((sum, point) => sum + Math.max(0, point.value), 0);
+	if (total <= 0) {
+		return "conic-gradient(#e2e8f0 0 100%)";
+	}
+
+	let cursor = 0;
+	const segments = points.map((point, index) => {
+		const start = cursor;
+		cursor += (Math.max(0, point.value) / total) * 100;
+		return `${CHART_COLORS[index % CHART_COLORS.length]} ${start}% ${cursor}%`;
+	});
+
+	return `conic-gradient(${segments.join(", ")})`;
+};
+
+const getChartSeries = (chart: SummaryChart) => {
+	const series = chart.series?.filter((item) => item.points.length > 0) ?? [];
+	return series.length > 0 ? series : [{ label: chart.unit || chart.title, points: chart.points }];
+};
+
+const getChartRange = (series: ReturnType<typeof getChartSeries>) => {
+	const values = series.flatMap((item) => item.points.map((point) => point.value));
+	return {
+		max: Math.max(...values, 1),
+		min: Math.min(...values, 0),
+	};
+};
+
+const getLinePath = (points: SummaryChart["points"], min: number, max: number) => {
+	if (points.length === 0) {
+		return "";
+	}
+
+	const range = Math.max(max - min, 1);
+
+	return points
+		.map((point, index) => {
+			const x = points.length === 1 ? LINE_CHART_WIDTH / 2 : (index / (points.length - 1)) * LINE_CHART_WIDTH;
+			const y =
+				LINE_CHART_HEIGHT -
+				((point.value - min) / range) * (LINE_CHART_HEIGHT - LINE_CHART_VERTICAL_PADDING * 2) -
+				LINE_CHART_VERTICAL_PADDING;
+			return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+		})
+		.join(" ");
+};
+
+const getCreativeTags = (creative: SummaryCreative) => creative.tags.filter(Boolean).slice(0, 4);
+
 const Home2Page: React.FC<Home2PageProps> = ({
 	sessions,
 	onRunTask,
@@ -270,15 +411,19 @@ const Home2Page: React.FC<Home2PageProps> = ({
 	onConnectRequiredIntegration,
 	onOpenBrandContext,
 	activeBrand,
-	surface = "home2",
+	isBrandGuidelinesConnected = false,
 	layout = "sections",
+	initialTabbedSectionId,
+	highlightSectionId,
+	singleTaskMode,
 }) => {
 	const [summaryPageBySection, setSummaryPageBySection] = useState<Record<Home2SectionId, number>>({
 		"competitor-intelligence": 0,
 		"ad-performance": 0,
 		"new-concepts": 0,
 	});
-	const [activeTabbedSectionId, setActiveTabbedSectionId] = useState<Home2SectionId>("competitor-intelligence");
+	const [activeTabbedSectionId, setActiveTabbedSectionId] = useState<Home2SectionId>(initialTabbedSectionId ?? "competitor-intelligence");
+	const [showHighlightedSectionTooltip, setShowHighlightedSectionTooltip] = useState(Boolean(highlightSectionId));
 	const [input, setInput] = useState("");
 	const [isComposerMenuOpen, setIsComposerMenuOpen] = useState(false);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -291,7 +436,7 @@ const Home2Page: React.FC<Home2PageProps> = ({
 	const explicitBrandContext = useMemo(() => findBrandContext(activeBrand), [activeBrand]);
 	const activeBrandContext = useMemo(() => explicitBrandContext ?? getBrandContext(activeBrand), [activeBrand, explicitBrandContext]);
 	const activeBrandPrimaryLogo = useMemo(() => getBrandContextPrimaryLogo(activeBrandContext), [activeBrandContext]);
-	const brandContextScore = useMemo(() => (explicitBrandContext ? getBrandContextCompletionScore(explicitBrandContext) : 0), [explicitBrandContext]);
+	const brandContextScore = explicitBrandContext ? (isBrandGuidelinesConnected ? 100 : 68) : 0;
 
 	const resizeComposer = useCallback(() => {
 		const node = inputRef.current;
@@ -308,6 +453,16 @@ const Home2Page: React.FC<Home2PageProps> = ({
 	useLayoutEffect(() => {
 		resizeComposer();
 	}, [input, resizeComposer]);
+
+	useEffect(() => {
+		if (initialTabbedSectionId) {
+			setActiveTabbedSectionId(initialTabbedSectionId);
+		}
+	}, [initialTabbedSectionId]);
+
+	useEffect(() => {
+		setShowHighlightedSectionTooltip(Boolean(highlightSectionId));
+	}, [highlightSectionId]);
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -367,6 +522,9 @@ const Home2Page: React.FC<Home2PageProps> = ({
 
 	const renderHomeFixedComposer = () => (
 		<div className="home-fixed-composer-area">
+			<a className="home-onboarding-link" href="/onboarding">
+				Open onboarding
+			</a>
 			<form className="home-fixed-composer" onSubmit={handleComposerSubmit}>
 				<div className="composer-overlay-menu home-fixed-attachment-menu" ref={composerMenuRef}>
 					<button
@@ -402,7 +560,7 @@ const Home2Page: React.FC<Home2PageProps> = ({
 					<BrandLogoMark
 						markText={activeBrandPrimaryLogo?.markText ?? activeBrand.charAt(0)}
 						imageUrl={activeBrandPrimaryLogo?.imageUrl}
-						size="xs"
+						size="lg"
 						label={`${activeBrand} logo`}
 					/>
 					<div className="home-brand-context-copy">
@@ -439,12 +597,22 @@ const Home2Page: React.FC<Home2PageProps> = ({
 							role="tab"
 							aria-selected={isActive}
 							className={`home2-tab ${isActive ? "is-active" : ""}`}
-							onClick={() => setActiveTabbedSectionId(section.id)}
+							onClick={() => {
+								setActiveTabbedSectionId(section.id);
+								if (section.id === highlightSectionId) {
+									setShowHighlightedSectionTooltip(false);
+								}
+							}}
 						>
 							<span className="home2-tab-icon">
 								<SectionIcon size={17} />
 							</span>
 							<span>{section.title}</span>
+							{showHighlightedSectionTooltip && highlightSectionId === section.id && (
+								<span className="home3-tab-tooltip" role="status">
+									Unlock more tasks here when you are ready.
+								</span>
+							)}
 						</button>
 					);
 				})}
@@ -487,22 +655,20 @@ const Home2Page: React.FC<Home2PageProps> = ({
 		);
 	};
 
-	const renderTaskCard = (section: Home2Section, task: Home2Task, taskIndex: number, label: string) => {
-		const isNextDeliverable = label === "Next Deliverable";
-
+	const renderTaskCard = (section: Home2Section, task: Home2Task, taskIndex: number, sourceSessionId?: string) => {
 		return (
 			<button
 				type="button"
-				className={`home2-task-card ${isNextDeliverable ? "is-next-deliverable" : ""}`}
-				onClick={() => onRunTask(section.id, taskIndex, task.prompt, task.id)}
+				className="home2-task-card"
+				onClick={() => onRunTask(section.id, taskIndex, task.prompt, task.id, task.summaryLayout, sourceSessionId)}
 			>
 				<span className="home2-task-watermark" aria-hidden="true">
-					<Target size={96} strokeWidth={1.6} />
+					<Target size={156} strokeWidth={1.45} />
 				</span>
-				<span className="home2-task-label">{label}</span>
 				<span className="home2-task-copy">
 					<strong>{task.title}</strong>
 					<span>{task.description}</span>
+					<span className="home2-task-frequency-tag">Weekly</span>
 				</span>
 				<span className="home2-task-action">
 					<span>Unlock Now</span>
@@ -517,29 +683,27 @@ const Home2Page: React.FC<Home2PageProps> = ({
 			return null;
 		}
 
+		const nextStep = summary.nextSteps[0];
+
 		return (
 			<div className="home2-next-steps">
-				<div className="home2-mini-title">Next steps</div>
-				{summary.nextSteps.slice(0, 2).map((nextStep, index) => (
-					<button
-						key={`${summarySessionId}-${nextStep.title}-${index}`}
-						type="button"
-						className="home2-next-step-card"
-						onClick={() => onRunTask(section.id, section.tasks.length + index, nextStep.prompt, `generated-${summarySessionId}-${index}`)}
-					>
-						<span className="home2-next-step-icon" aria-hidden="true">
-							<Sparkles size={22} fill="currentColor" />
-						</span>
-						<span className="home2-next-step-copy">
-							<strong>{nextStep.title}</strong>
-							<span>{nextStep.prompt}</span>
-						</span>
-						<span className="home2-next-step-action">
-							<span>Unlock Now</span>
-							<ArrowUp size={14} />
-						</span>
-					</button>
-				))}
+				<button
+					type="button"
+					className="home2-next-step-card"
+					onClick={() => onRunTask(section.id, section.tasks.length, nextStep.prompt, `generated-${summarySessionId}-0`, undefined, summarySessionId)}
+				>
+					<span className="home2-next-step-icon" aria-hidden="true">
+						<Sparkles size={22} fill="currentColor" />
+					</span>
+					<span className="home2-next-step-copy">
+						<strong>{nextStep.title}</strong>
+						<span>{nextStep.prompt}</span>
+					</span>
+					<span className="home2-next-step-action">
+						<span>Run Now</span>
+						<ArrowUp size={14} />
+					</span>
+				</button>
 			</div>
 		);
 	};
@@ -561,17 +725,11 @@ const Home2Page: React.FC<Home2PageProps> = ({
 				<div className="home2-run-header">
 					<div>
 						<h3>{session.title}</h3>
-						<span className="home2-run-meta">
-							<img src={rayaThinkingGif} alt="" />
-							Running now
-						</span>
 					</div>
 					<button type="button" className="home2-view-details-btn" onClick={() => onSessionSelect(session.id)}>
 						View Details
 					</button>
 				</div>
-
-				{blockingIntegration && renderConnectionRequiredCard(session, blockingIntegration)}
 
 				<div className="home2-running-progress-shell" aria-label={`${completedCount} of ${tasks.length || 1} steps complete`}>
 					<div className="home2-running-progress-fill" style={{ width: `${progressPercent}%` }} />
@@ -602,21 +760,237 @@ const Home2Page: React.FC<Home2PageProps> = ({
 						</div>
 					)}
 				</div>
+
+				{!blockingIntegration && (
+					<span className="home2-run-meta home2-running-status-meta">
+						<img src={rayaThinkingGif} alt="" />
+						Running now
+					</span>
+				)}
+
+				{blockingIntegration && renderConnectionRequiredCard(session, blockingIntegration)}
 			</article>
 		);
 	};
 
+	const renderSummaryChart = (chart: SummaryChart) => {
+		const total = chart.points.reduce((sum, point) => sum + point.value, 0);
+		const chartSeries = getChartSeries(chart);
+		const chartRange = getChartRange(chartSeries);
+		const maxBarValue = Math.max(...chart.points.map((point) => point.value), 1);
+
+		return (
+			<div key={chart.id} className={`home2-summary-chart-card is-${chart.type}`}>
+				<div className="home2-summary-chart-title">
+					<strong>{chart.title}</strong>
+					{chart.unit && <span>{chart.unit}</span>}
+				</div>
+				{chart.type === "line" ? (
+					<div className="home2-line-chart" aria-label={chart.title}>
+						<svg viewBox={`0 0 ${LINE_CHART_WIDTH} ${LINE_CHART_HEIGHT}`} role="img">
+							{chartSeries.map((series, seriesIndex) => {
+								const color = series.color || CHART_COLORS[seriesIndex % CHART_COLORS.length];
+								return (
+									<g key={series.label}>
+										<path
+											d={getLinePath(series.points, chartRange.min, chartRange.max)}
+											fill="none"
+											stroke={color}
+											strokeWidth="3"
+											strokeLinecap="round"
+											strokeLinejoin="round"
+										/>
+										{series.points.map((point, index) => {
+											const range = Math.max(chartRange.max - chartRange.min, 1);
+											const x = series.points.length === 1 ? LINE_CHART_WIDTH / 2 : (index / (series.points.length - 1)) * LINE_CHART_WIDTH;
+											const y =
+												LINE_CHART_HEIGHT -
+												((point.value - chartRange.min) / range) * (LINE_CHART_HEIGHT - LINE_CHART_VERTICAL_PADDING * 2) -
+												LINE_CHART_VERTICAL_PADDING;
+											return <circle key={`${series.label}-${point.label}-${index}`} cx={x} cy={y} r="3.4" fill={color} />;
+										})}
+									</g>
+								);
+							})}
+						</svg>
+							<div className="home2-line-chart-meta">
+								<div className="home2-line-chart-labels">
+									{chartSeries[0]?.points.slice(0, 4).map((point) => (
+										<span key={point.label}>{point.label}</span>
+									))}
+								</div>
+							<div className="home2-chart-series-legend">
+								{chartSeries.slice(0, 4).map((series, index) => (
+									<span key={series.label}>
+										<i style={{ background: series.color || CHART_COLORS[index % CHART_COLORS.length] }} />
+										{series.label}
+									</span>
+								))}
+							</div>
+						</div>
+					</div>
+				) : chart.type === "bar" ? (
+					<div className="home2-bar-chart" aria-label={chart.title}>
+						{chart.points.slice(0, 5).map((point, index) => (
+							<div key={`${point.label}-${index}`} className="home2-bar-chart-row">
+								<span>{point.label}</span>
+								<div className="home2-bar-chart-track">
+									<i
+										style={{
+											width: `${Math.max(8, Math.round((point.value / maxBarValue) * 100))}%`,
+											background: CHART_COLORS[index % CHART_COLORS.length],
+										}}
+									/>
+								</div>
+								<em>{point.value}</em>
+							</div>
+						))}
+					</div>
+				) : (
+					<div className="home2-donut-chart-wrap">
+						<div className="home2-donut-chart" style={{ background: buildDonutGradient(chart.points) }}>
+							<span>{Math.round(total)}</span>
+						</div>
+						<div className="home2-chart-legend">
+							{chart.points.map((point, index) => (
+								<div key={`${point.label}-${index}`} className="home2-chart-legend-item">
+									<span style={{ background: CHART_COLORS[index % CHART_COLORS.length] }} />
+									<strong>{point.label}</strong>
+									<em>{point.value}</em>
+								</div>
+							))}
+						</div>
+					</div>
+				)}
+			</div>
+		);
+	};
+
+	const getCreativeScriptSections = (creative: SummaryCreative) => {
+		const sections = creative.scriptSections?.filter((section) => section.narration) ?? [];
+		if (sections.length > 0) {
+			return sections.slice(0, 3);
+		}
+
+		const fallbackLabels = ["Hook", "Problem / Desire", "Solution"];
+		const narrations = creative.scriptNarrations?.filter(Boolean) ?? [];
+		const lines = narrations.length > 0 ? narrations.slice(0, 3) : [creative.scriptPreview || creative.description || "Video script concept"];
+		return lines.map((narration, index) => ({
+			label: fallbackLabels[index] ?? `Beat ${index + 1}`,
+			narration,
+		}));
+	};
+
+	const renderSummaryCreative = (creative: SummaryCreative) => {
+		if (creative.format === "video") {
+			return (
+				<div key={creative.id} className="home2-summary-creative-card is-video-script">
+					<div className="home2-summary-script-card-header">
+						<strong>{creative.title}</strong>
+						<span>Script</span>
+					</div>
+					<div className="home2-summary-script-lines">
+						{getCreativeScriptSections(creative).map((section, index) => (
+							<div key={`${creative.id}-line-${index}`} className="home2-summary-script-line">
+								<span>{section.label}</span>
+								<p>{section.narration}</p>
+							</div>
+						))}
+					</div>
+					{getCreativeTags(creative).length > 0 && (
+						<div className="home2-summary-creative-tags">
+							{getCreativeTags(creative).map((tag) => (
+								<span key={tag}>{tag}</span>
+							))}
+						</div>
+					)}
+				</div>
+			);
+		}
+
+		return (
+			<div key={creative.id} className="home2-summary-creative-card">
+				<div className="home2-summary-creative-preview">
+					{creative.imageUrl ? <img src={creative.imageUrl} alt="" loading="lazy" /> : <Sparkles size={20} />}
+				</div>
+				<div className="home2-summary-creative-copy">
+					<div>
+						<strong>{creative.title}</strong>
+					</div>
+					{getCreativeTags(creative).length > 0 && (
+						<div className="home2-summary-creative-tags">
+							{getCreativeTags(creative).map((tag) => (
+								<span key={tag}>{tag}</span>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	};
+
+	const getSummaryCreativeGridClassName = (creatives: SummaryCreative[] = []) =>
+		`home2-summary-creatives ${creatives.some((creative) => creative.format === "video") ? "is-script-grid" : ""}`;
+
+	const renderSummaryAdCard = (item: FocusedItemCard) => {
+		const metrics = getAdCardMetrics(item);
+		return (
+			<div key={`ad-${item.id}`} className="home2-summary-ad-card">
+				<div className="home2-summary-ad-thumb">
+					{item.thumbnail ? <img src={item.thumbnail} alt="" loading="lazy" /> : <ImageIcon size={20} />}
+					{item.displayFormat && <span>{item.displayFormat}</span>}
+				</div>
+				<div className="home2-summary-ad-copy">
+					<strong>{item.name}</strong>
+					{metrics.length > 0 && (
+						<div className="home2-summary-ad-metrics">
+							{metrics.map((metric) => (
+								<span key={metric.label}>
+									<em>{metric.label}</em>
+									{metric.value}
+								</span>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	};
+
+	const renderFocusAdGrid = (session: Session) => {
+		const adCards = getSummaryAdCards(session);
+
+		if (adCards.length === 0) {
+			return null;
+		}
+
+		return (
+			<div className="home2-summary-visual-grid">
+				{adCards.map(renderSummaryAdCard)}
+			</div>
+		);
+	};
+
 	const renderSummaryArtifacts = (summary: RunSummary, session: Session) => {
+		const layout = summary.layout ?? "default";
+		const isInsightLayout = layout === "analysis" || layout === "default";
+		const charts = layout === "analysis" ? summary.charts ?? [] : [];
+		const creatives = layout === "creation" ? summary.creatives ?? [] : [];
 		const imageUrls = summary.imageUrls.slice(0, 4);
-		const generatedDocuments = getGeneratedDocuments(session).slice(0, 3);
-		if (imageUrls.length === 0 && generatedDocuments.length === 0) {
+		const allGeneratedDocuments = getGeneratedDocuments(session);
+		const generatedDocuments = layout === "creation" || isInsightLayout ? [] : allGeneratedDocuments.slice(0, 3);
+		const remainingDocumentCount = Math.max(0, allGeneratedDocuments.length - generatedDocuments.length);
+		const focusAdCards = isInsightLayout ? getSummaryAdCards(session) : [];
+		const hasImageArtifacts = !isInsightLayout && imageUrls.length > 0;
+		if (charts.length === 0 && creatives.length === 0 && !hasImageArtifacts && generatedDocuments.length === 0 && focusAdCards.length === 0) {
 			return null;
 		}
 
 		return (
 			<div className="home2-summary-artifacts">
-				<div className="home2-mini-title">Artifacts</div>
-				{imageUrls.length > 0 && (
+				{charts.length > 0 && <div className="home2-summary-charts">{charts.slice(0, 3).map(renderSummaryChart)}</div>}
+				{isInsightLayout && renderFocusAdGrid(session)}
+				{!isInsightLayout && (layout !== "creation" || creatives.length === 0) && imageUrls.length > 0 && (
 					<div className="home2-summary-images">
 						{imageUrls.map((imageUrl, index) => (
 							<div key={`${imageUrl}-${index}`} className="home2-summary-image">
@@ -625,7 +999,8 @@ const Home2Page: React.FC<Home2PageProps> = ({
 						))}
 					</div>
 				)}
-				{generatedDocuments.length > 0 && (
+				{creatives.length > 0 && <div className={getSummaryCreativeGridClassName(creatives)}>{creatives.slice(0, 12).map(renderSummaryCreative)}</div>}
+				{!isInsightLayout && generatedDocuments.length > 0 && (
 					<div className="home2-document-list">
 						{generatedDocuments.map((document) => (
 							<div key={document.id} className="home2-document-item">
@@ -638,6 +1013,9 @@ const Home2Page: React.FC<Home2PageProps> = ({
 								</span>
 							</div>
 						))}
+						{remainingDocumentCount > 0 && (
+							<div className="home2-document-more">+{remainingDocumentCount} more</div>
+						)}
 					</div>
 				)}
 			</div>
@@ -649,7 +1027,18 @@ const Home2Page: React.FC<Home2PageProps> = ({
 		if (!summary) {
 			return null;
 		}
-		const hasArtifacts = summary.imageUrls.length > 0 || getGeneratedDocuments(session).length > 0;
+		const layout = summary.layout ?? "default";
+		const isCreationLayout = layout === "creation";
+		const isInsightLayout = layout === "analysis" || layout === "default";
+		const focusAdCardCount = isInsightLayout ? getSummaryAdCards(session).length : 0;
+		const documentArtifactCount = isCreationLayout || isInsightLayout ? 0 : getGeneratedDocuments(session).length;
+		const hasImageArtifacts = !isInsightLayout && summary.imageUrls.length > 0;
+		const hasArtifacts =
+			hasImageArtifacts ||
+			documentArtifactCount > 0 ||
+			(summary.charts?.length ?? 0) > 0 ||
+			(summary.creatives?.length ?? 0) > 0 ||
+			focusAdCardCount > 0;
 
 		return (
 			<article className="home2-run-card">
@@ -675,47 +1064,65 @@ const Home2Page: React.FC<Home2PageProps> = ({
 					</div>
 				</div>
 
-				<div className={`home2-summary-body ${hasArtifacts ? "" : "without-artifacts"}`}>
-					<div className="home2-summary-insights">
-						<div className="home2-mini-title">Key insights</div>
-						<div className="home2-insight-list">
-							{summary.insights.slice(0, 4).map((insight, index) => {
-								const displayInsight = getDisplayInsight(insight, index);
-								return (
-									<div key={`${displayInsight.title}-${displayInsight.description}`} className="home2-insight-item">
-										<span className="home2-insight-emoji" aria-hidden="true">
-											{displayInsight.emoji}
-										</span>
-										<div className="home2-insight-copy">
-											<h4>{displayInsight.title}</h4>
-											<p>{displayInsight.description}</p>
-										</div>
+				<div
+					className={`home2-summary-body ${hasArtifacts ? "" : "without-artifacts"} ${isInsightLayout ? "is-insight-layout" : ""} ${
+						layout === "analysis" ? "is-analysis" : ""
+					} ${isCreationLayout ? "is-creation" : ""}`}
+				>
+					{isCreationLayout ? (
+						<>
+							{summary.overview && <p className="home2-summary-overview">{summary.overview}</p>}
+							{renderSummaryArtifacts(summary, session)}
+						</>
+					) : (
+						<>
+							<div className="home2-summary-insights">
+								{summary.error ? (
+									renderSummaryError(summary)
+								) : (
+									<div className="home2-insight-list">
+										{summary.insights.slice(0, 4).map((insight, index) => {
+											const displayInsight = getDisplayInsight(insight, index);
+											return (
+												<div key={`${displayInsight.title}-${displayInsight.description}`} className="home2-insight-item">
+													<span className="home2-insight-emoji" aria-hidden="true">
+														{displayInsight.emoji}
+													</span>
+													<div className="home2-insight-copy">
+														<h4>{displayInsight.title}</h4>
+														<p>{displayInsight.description}</p>
+													</div>
+												</div>
+											);
+										})}
 									</div>
-								);
-							})}
-						</div>
-					</div>
+								)}
+							</div>
 
-					{renderSummaryArtifacts(summary, session)}
+							{renderSummaryArtifacts(summary, session)}
+						</>
+					)}
 				</div>
 			</article>
 		);
 	};
 
 	const renderSection = (section: Home2Section) => {
+		const isTabbedLayout = layout === "tabs";
 		const SectionIcon = SECTION_ICONS[section.id];
-		const sectionSessions = getSectionSessions(sessions, section.id, surface);
+		const sectionSessions = getSectionSessions(sessions, section.id);
 		const runningSession = sectionSessions.find((session) => session.status === "running") ?? null;
 		const completedSessions = sectionSessions.filter((session) => session.status === "completed" && session.summary);
 		const safePageIndex = completedSessions.length > 0 ? Math.min(summaryPageBySection[section.id] ?? 0, completedSessions.length - 1) : 0;
-		const selectedSummarySession = completedSessions[safePageIndex] ?? null;
+		const selectedSummarySession = (isTabbedLayout ? completedSessions[0] : completedSessions[safePageIndex]) ?? null;
+		const visibleSummarySessions = isTabbedLayout ? completedSessions : selectedSummarySession ? [selectedSummarySession] : [];
 		const nextPredefinedTaskIndex = runningSession ? null : getNextPredefinedTaskIndex(section, sectionSessions);
 		const nextPredefinedTask = nextPredefinedTaskIndex === null ? null : section.tasks[nextPredefinedTaskIndex];
 
 		return (
 			<section key={section.id} className="home2-section" aria-label={section.title}>
-				<div className={`home2-section-header ${layout === "tabs" ? "is-home3-description" : ""}`}>
-					{layout === "tabs" ? (
+				<div className={`home2-section-header ${isTabbedLayout ? "is-home3-description" : ""}`}>
+					{isTabbedLayout ? (
 						<p>{section.description}</p>
 					) : (
 						<div className="home2-section-title-row">
@@ -734,11 +1141,11 @@ const Home2Page: React.FC<Home2PageProps> = ({
 					{runningSession
 						? renderRunningSession(runningSession)
 						: nextPredefinedTask && nextPredefinedTaskIndex !== null
-							? renderTaskCard(section, nextPredefinedTask, nextPredefinedTaskIndex, selectedSummarySession ? "Next Deliverable" : "Start here")
+							? renderTaskCard(section, nextPredefinedTask, nextPredefinedTaskIndex, selectedSummarySession?.id)
 							: renderGeneratedNextSteps(section, selectedSummarySession?.summary, selectedSummarySession?.id ?? section.id)}
 
-					{selectedSummarySession && renderSummary(selectedSummarySession)}
-					{completedSessions.length > 1 && (
+					{visibleSummarySessions.map((session) => renderSummary(session))}
+					{!isTabbedLayout && completedSessions.length > 1 && (
 						<div className="home2-pagination home2-section-pagination" aria-label={`${section.title} summaries`}>
 							<button type="button" onClick={() => paginateSection(section.id, completedSessions.length, "left")} aria-label="Previous summary">
 								<ChevronLeft size={18} />
@@ -756,13 +1163,29 @@ const Home2Page: React.FC<Home2PageProps> = ({
 		);
 	};
 
+	if (singleTaskMode) {
+		const singleTaskSection = HOME2_SECTIONS.find((section) => section.id === singleTaskMode.sectionId);
+		const singleTask = singleTaskSection?.tasks[singleTaskMode.taskIndex];
+		const singleTaskSession = singleTaskMode.sessionId ? sessions.find((session) => session.id === singleTaskMode.sessionId) : null;
+
+		return (
+			<div className="home2-single-task-host">
+				{singleTaskSession
+					? singleTaskSession.status === "completed" && singleTaskSession.summary
+						? renderSummary(singleTaskSession)
+						: renderRunningSession(singleTaskSession)
+					: singleTaskSection && singleTask
+						? renderTaskCard(singleTaskSection, singleTask, singleTaskMode.taskIndex, singleTaskMode.sourceSessionId)
+						: null}
+			</div>
+		);
+	}
+
 	return (
 		<div className={`home2-page ${layout === "tabs" ? "is-home3" : ""}`}>
-			<div className="home2-page-inner">
-				{renderHomeBrandContextCard()}
-				{renderSectionTabs()}
-				{visibleSections.map(renderSection)}
-			</div>
+			{renderHomeBrandContextCard()}
+			{renderSectionTabs()}
+			{visibleSections.map(renderSection)}
 			{renderHomeFixedComposer()}
 		</div>
 	);

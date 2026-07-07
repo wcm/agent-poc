@@ -8,6 +8,8 @@ export type IntegrationStatus = "connected" | "available" | "coming_soon";
 export type IntegrationState = Record<string, boolean>;
 export type IntegrationLogoVariant = "default" | "bare";
 
+export const BRAND_GUIDELINES_INTEGRATION_ID = "brand_guidelines";
+
 export interface IntegrationDefinition {
 	id: string;
 	name: string;
@@ -36,8 +38,6 @@ export const INTEGRATION_SECTIONS: Array<{ id: IntegrationSectionId; label: stri
 
 export const INTEGRATIONS_PAGE_SECTIONS = INTEGRATION_SECTIONS.filter((section) => section.id !== "myConnections");
 
-export const INTEGRATION_STATE_STORAGE_KEY = "raya.integration.state.v2";
-
 const createServiceLogoRenderer =
 	(logoId: ServiceLogoId, alt: string) => (size = 24, variant: IntegrationLogoVariant = "default") =>
 		variant === "bare" ? (
@@ -45,6 +45,56 @@ const createServiceLogoRenderer =
 		) : (
 			<TiledServiceLogo logoId={logoId} alt={alt} size={size} />
 		);
+
+const renderBrandGuidelinesLogo = (size = 24, variant: IntegrationLogoVariant = "default") => {
+	const markSize = variant === "bare" ? size : Math.round(size * 0.72);
+	const mark = (
+		<span
+			aria-label="Brand Guidelines"
+			role="img"
+			style={{
+				width: markSize,
+				height: markSize,
+				borderRadius: Math.max(6, Math.round(markSize * 0.28)),
+				background: "#111827",
+				color: "#ffffff",
+				display: "inline-flex",
+				alignItems: "center",
+				justifyContent: "center",
+				fontSize: Math.max(8, Math.round(markSize * 0.34)),
+				fontWeight: 700,
+				lineHeight: 1,
+				letterSpacing: 0,
+				flexShrink: 0,
+			}}
+		>
+			BG
+		</span>
+	);
+
+	if (variant === "bare") {
+		return mark;
+	}
+
+	return (
+		<span
+			style={{
+				width: size,
+				height: size,
+				borderRadius: Math.max(10, Math.round(size * 0.32)),
+				background: "#ffffff",
+				border: "1px solid #e2e8f0",
+				display: "inline-flex",
+				alignItems: "center",
+				justifyContent: "center",
+				flexShrink: 0,
+				overflow: "hidden",
+			}}
+		>
+			{mark}
+		</span>
+	);
+};
 
 export const INTEGRATIONS: IntegrationDefinition[] = [
 	{
@@ -126,6 +176,16 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
 		availability: "available",
 		searchTerms: ["slack", "communication", "chat", "workspace", "channel"],
 		renderLogo: createServiceLogoRenderer("slack", "Slack"),
+	},
+	{
+		id: BRAND_GUIDELINES_INTEGRATION_ID,
+		name: "Brand Guidelines",
+		description: "Connect brand rules, voice, visual style, and creative guardrails for generation tasks.",
+		defaultConnectedAccountName: "Nike Brand Guidelines",
+		section: "myConnections",
+		availability: "available",
+		searchTerms: ["brand guidelines", "brand guide", "style guide", "brand voice", "creative rules", "tone"],
+		renderLogo: renderBrandGuidelinesLogo,
 	},
 	{
 		id: "notion",

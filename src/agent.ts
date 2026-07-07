@@ -7,7 +7,8 @@ import {
     PlanStep,
     UserContext,
     createEmptyContext, 
-    addToHistory
+    addToHistory,
+    applyPreviousRunContext
 } from './context';
 import { getConnectedIntegrationInputs, resolveIntegrations } from './integrations';
 import { requireIntegration } from './integration-requirements';
@@ -144,7 +145,11 @@ export class Agent extends EventEmitter {
             } else {
                 this.context.userInput = userInput;
                 this.context.integration = activeIntegration;
+                this.context.runMetadata = userContext?.runMetadata;
                 this.context.integrations = resolveIntegrations(connectedIntegrationInputs);
+                if (userContext?.previousRun) {
+                    applyPreviousRunContext(this.context, userContext.previousRun);
+                }
                 // Update followed brands if provided
                 if (userContext?.brands) {
                     this.context.followedBrands = userContext.brands;
@@ -567,6 +572,19 @@ export class Agent extends EventEmitter {
             }
 
             case 'generateAdVariations': {
+                const requirement = requireIntegration(this.context, {
+                    integrationId: 'brand_guidelines',
+                    mode: 'instruction',
+                    query: 'Brand Guidelines required for creative generation',
+                    purpose: 'generate brand-safe creative concepts and ad variations'
+                });
+
+                if (requirement.block) {
+                    this.context.integrationResults.push(requirement.block);
+                    this.emitIntegrationResult(requirement.block);
+                    throw new RunBlockedError(requirement.block);
+                }
+
                 const result = await generateAdVariationsTool.execute(step.description, this.context, this.stream);
                 return `Generated ad variations for ${result.results.length} items`;
             }

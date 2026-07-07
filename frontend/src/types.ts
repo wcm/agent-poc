@@ -21,10 +21,93 @@ export interface RunInsight {
     description: string;
 }
 
+export type SummaryLayout = 'analysis' | 'creation' | 'default';
+export type SummaryChartType = 'line' | 'donut' | 'bar';
+
+export interface SummaryChartPoint {
+    label: string;
+    value: number;
+}
+
+export interface SummaryChartSeries {
+    label: string;
+    points: SummaryChartPoint[];
+    color?: string;
+}
+
+export interface SummaryChart {
+    id: string;
+    type: SummaryChartType;
+    title: string;
+    unit?: string;
+    points: SummaryChartPoint[];
+    series?: SummaryChartSeries[];
+}
+
+export interface SummaryCreative {
+    id: string;
+    title: string;
+    format: 'image' | 'video' | 'concept';
+    description?: string;
+    rationale: string;
+    tags: string[];
+    imageUrl?: string;
+    scriptPreview?: string;
+    scriptNarrations?: string[];
+    scriptSections?: Array<{
+        label: string;
+        narration: string;
+    }>;
+}
+
 export interface RunSummary {
+    layout?: SummaryLayout;
+    overview?: string;
+    error?: {
+        title: string;
+        message: string;
+        details?: string;
+        rawResponse?: string;
+        parsedKeys?: string[];
+    };
     imageUrls: string[];
     insights: RunInsight[];
     nextSteps: RunNextStep[];
+    charts?: SummaryChart[];
+    creatives?: SummaryCreative[];
+}
+
+export interface PreviousRunStepContext {
+    tool: string;
+    description: string;
+}
+
+export interface PreviousRunReportContext {
+    id: string;
+    reportType: 'performance' | 'creative' | 'common';
+    title: string;
+    content: string;
+    itemId?: string;
+    itemName?: string;
+    itemData?: ReportItemData;
+}
+
+export interface PreviousRunArtifactContext {
+    id: string;
+    type: 'report' | 'focus_items' | 'image_concepts' | 'video_concepts' | 'summary';
+    title: string;
+}
+
+export interface PreviousRunContext {
+    sourceSessionId: string;
+    sourceTaskId?: string;
+    title: string;
+    userRequest?: string;
+    summary?: RunSummary;
+    completedSteps: PreviousRunStepContext[];
+    artifacts: PreviousRunArtifactContext[];
+    focusItems: FocusedItemCard[];
+    reports: PreviousRunReportContext[];
 }
 
 // Text event
@@ -370,6 +453,8 @@ export interface Session {
         sectionId: string;
         taskId: string;
         taskIndex: number;
+        summaryLayout?: SummaryLayout;
+        sourceSessionId?: string;
     };
 }
 

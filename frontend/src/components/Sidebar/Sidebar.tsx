@@ -183,9 +183,16 @@ const Sidebar: React.FC<SidebarProps> = ({
 									</div>
 
 									<div className="raya-primary-nav-group">
-										<div className={`session-item raya-new-task-item ${activeRayaView === "tasks" && !activeSessionId ? "active" : ""}`} onClick={handleNewTaskClick}>
+										<div
+											className={`session-item raya-new-task-item ${activeRayaView === "home3" ? "active" : ""}`}
+											onClick={() => {
+												onRayaViewChange?.("home3");
+												onAutomationSelect?.(null);
+												onAutomationModeChange?.("overview");
+											}}
+										>
 											<House size={16} />
-											<span className="session-item-title">Home</span>
+											<span className="session-item-title">Home-3</span>
 										</div>
 
 										<div
@@ -200,16 +207,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 											<span className="session-item-title">Home-2</span>
 										</div>
 
-										<div
-											className={`session-item raya-new-task-item ${activeRayaView === "home3" ? "active" : ""}`}
-											onClick={() => {
-												onRayaViewChange?.("home3");
-												onAutomationSelect?.(null);
-												onAutomationModeChange?.("overview");
-											}}
-										>
+										<div className={`session-item raya-new-task-item ${activeRayaView === "tasks" && !activeSessionId ? "active" : ""}`} onClick={handleNewTaskClick}>
 											<House size={16} />
-											<span className="session-item-title">Home-3</span>
+											<span className="session-item-title">Home</span>
 										</div>
 
 										<div className={`session-item raya-subview-item ${activeRayaView === "brandContext" ? "active" : ""}`} onClick={handleBrandContextClick}>

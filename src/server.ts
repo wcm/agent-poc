@@ -26,13 +26,15 @@ const app = express();
 const port = process.env.PORT || 3002;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 // Serve static files from the React frontend app
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
 // Store agent instances per session for isolation
 const agents = new Map<string, Agent>();
+const streamContexts = new Map<string, UserContext | undefined>();
+const STREAM_CONTEXT_TTL_MS = 10 * 60 * 1000;
 
 function getAgent(sessionId: string): Agent {
     if (!agents.has(sessionId)) {
@@ -42,6 +44,39 @@ function getAgent(sessionId: string): Agent {
         logger.session(sessionId, 'ACCESS');
     }
     return agents.get(sessionId)!;
+}
+
+function getStreamContextId(req: Request): string | undefined {
+    return typeof req.query.contextId === 'string' ? req.query.contextId : undefined;
+}
+
+function scheduleStreamContextCleanup(contextId: string): void {
+    const timeout = setTimeout(() => {
+        streamContexts.delete(contextId);
+    }, STREAM_CONTEXT_TTL_MS);
+    timeout.unref?.();
+}
+
+function getUserContextFromRequest(req: Request, action: string): UserContext | undefined {
+    const contextId = getStreamContextId(req);
+    if (contextId) {
+        if (!streamContexts.has(contextId)) {
+            logger.log('WARN', { component: 'Server', action }, `Stream context not found: ${contextId}`);
+            return undefined;
+        }
+        return streamContexts.get(contextId);
+    }
+
+    if (!req.query.context) {
+        return undefined;
+    }
+
+    try {
+        return JSON.parse(req.query.context as string);
+    } catch (e) {
+        logger.log('WARN', { component: 'Server', action }, 'Failed to parse context');
+        return undefined;
+    }
 }
 
 // Helper to read/write data
@@ -164,6 +199,13 @@ const getGeneratedImageManifestForClient = (manifest: Awaited<ReturnType<typeof 
             images: manifest.images.map(stripGeneratedImageRecordForClient)
         };
 
+app.post('/api/stream/context', (req: Request, res: Response) => {
+    const contextId = generateId('stream-context');
+    streamContexts.set(contextId, req.body?.context as UserContext | undefined);
+    scheduleStreamContextCleanup(contextId);
+    res.json({ contextId });
+});
+
 app.get('/api/stream', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -174,15 +216,8 @@ app.get('/api/stream', async (req: Request, res: Response) => {
     const integrationId = (req.query.integrationId as string) || 'meta_ads';
     const sessionId = (req.query.sessionId as string) || 'default';
     
-    // Parse user-provided context (integration and brands)
-    let userContext: UserContext | undefined;
-    if (req.query.context) {
-        try {
-            userContext = JSON.parse(req.query.context as string);
-        } catch (e) {
-            logger.log('WARN', { component: 'Server', action: 'PARSE_CONTEXT' }, 'Failed to parse context');
-        }
-    }
+    const contextId = getStreamContextId(req);
+    const userContext = getUserContextFromRequest(req, 'PARSE_CONTEXT');
 
     if (!message) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: "Message required" })}\n\n`);
@@ -206,6 +241,9 @@ app.get('/api/stream', async (req: Request, res: Response) => {
         res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
         res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     } finally {
+        if (contextId) {
+            streamContexts.delete(contextId);
+        }
         // Clean up listener to avoid leaks
         agent.off('stream', onStream);
         res.end();
@@ -221,14 +259,8 @@ app.get('/api/stream/resume', async (req: Request, res: Response) => {
     const sessionId = (req.query.sessionId as string) || 'default';
     const integrationId = req.query.integrationId as string;
 
-    let userContext: UserContext | undefined;
-    if (req.query.context) {
-        try {
-            userContext = JSON.parse(req.query.context as string);
-        } catch (e) {
-            logger.log('WARN', { component: 'Server', action: 'PARSE_CONTEXT' }, 'Failed to parse resume context');
-        }
-    }
+    const contextId = getStreamContextId(req);
+    const userContext = getUserContextFromRequest(req, 'PARSE_RESUME_CONTEXT');
 
     if (!integrationId) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: "Integration required" })}\n\n`);
@@ -250,6 +282,9 @@ app.get('/api/stream/resume', async (req: Request, res: Response) => {
         res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
         res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     } finally {
+        if (contextId) {
+            streamContexts.delete(contextId);
+        }
         agent.off('stream', onStream);
         res.end();
     }
@@ -298,11 +333,28 @@ app.post('/api/files/generated-image-ads/generate', async (req: Request, res: Re
     const requestedCount = parseBoundedInt(req.body?.count ?? req.query.count, 12, 1, 24);
     const conceptsPerSource = parseBoundedInt(req.body?.conceptsPerSource ?? req.query.conceptsPerSource, 4, 1, 6);
     const integrationId = String(req.body?.integrationId ?? req.query.integrationId ?? 'meta_ads');
+    const requestIntegrations = Array.isArray(req.body?.integrations) ? req.body.integrations : [];
+    const hasBrandGuidelinesConnection =
+        Boolean(req.body?.brandGuidelinesConnected) ||
+        requestIntegrations.some((integration: any) =>
+            typeof integration === 'string'
+                ? integration === 'brand_guidelines'
+                : integration?.id === 'brand_guidelines' && integration?.status === 'connected'
+        );
     const includeInactive = Boolean(req.body?.includeInactive ?? req.query.includeInactive);
     const runId = generateId('image-run');
     const createdAt = new Date().toISOString();
     const newRecords: GeneratedImageFileRecord[] = [];
     const errors: GeneratedImageRun['errors'] = [];
+
+    if (!hasBrandGuidelinesConnection) {
+        res.status(428).json({
+            error: 'Brand Guidelines connection required before generating image variations.',
+            integrationId: 'brand_guidelines',
+            integrationName: 'Brand Guidelines'
+        });
+        return;
+    }
 
     try {
         const analytics = await readJson('own-analytics.json');
@@ -771,9 +823,7 @@ const connectIntegration = async (req: Request, res: Response) => {
         const integrations = analytics.integrations;
         const integration = integrations.find((c: any) => c.id === id);
         if (integration) {
-            integration.is_connected = true;
-            await writeJson('own-analytics.json', analytics);
-            res.json(integration);
+            res.json({ ...integration, is_connected: true });
         } else {
             res.status(404).json({ error: 'Data source not found' });
         }
@@ -790,9 +840,7 @@ const disconnectIntegration = async (req: Request, res: Response) => {
         const integrations = analytics.integrations;
         const integration = integrations.find((c: any) => c.id === id);
         if (integration) {
-            integration.is_connected = false;
-            await writeJson('own-analytics.json', analytics);
-            res.json(integration);
+            res.json({ ...integration, is_connected: false });
         } else {
             res.status(404).json({ error: 'Data source not found' });
         }
@@ -804,8 +852,6 @@ const disconnectIntegration = async (req: Request, res: Response) => {
 
 // Connect a integration.
 app.post('/api/integrations/:id/connect', connectIntegration);
-app.post('/api/integrations/:id/connect', connectIntegration);
-app.post('/api/integrations/:id/disconnect', disconnectIntegration);
 app.post('/api/integrations/:id/disconnect', disconnectIntegration);
 
 // Anything that doesn't match the above, send back index.html

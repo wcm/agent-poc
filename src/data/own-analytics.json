@@ -5,7 +5,7 @@
             "name": "NIKE Official Meta",
             "platform": "meta",
             "account_id": "act_123456789",
-            "is_connected": true
+            "is_connected": false
         },
         {
             "id": "tiktok_ads",

@@ -34,8 +34,18 @@ Return ONLY valid JSON — no markdown fences, no commentary.
     {
       "concept_name": "Short Title (max 5 words)",
       "concept_description": "Short description (max 10 words)",
-      "concept_summary": "1-2 sentence summary of the creative direction.",
-      "concept_detail": "- Layout: ...\\n- Style: ...\\n- Visuals: ...\\n- Text/Copy: ...\\n- Tone: ...\\n- Logo: ...",
+      "concept_summary": "One sentence summary of the creative direction.",
+      "concept_detail": {
+        "layout": "Composition and arrangement.",
+        "style": "Visual aesthetic.",
+        "visuals": "Key visual elements, colors, subjects, setting.",
+        "text_copy": {
+          "headline": "Actual headline text to render.",
+          "cta": "Actual CTA text to render."
+        },
+        "tone": "Mood and emotional tone.",
+        "logo": "Logo placement and treatment."
+      },
       "personas": ["Persona Title 1", "Persona Title 2"],
       "creative_tags": {
         "ad_angles": ["angle1", "angle2"],
@@ -47,16 +57,20 @@ Return ONLY valid JSON — no markdown fences, no commentary.
 }
 
 ## CONCEPT DETAIL GUIDELINES
-Each concept_detail must be a bullet-point structured prompt describing:
-- **Layout**: Composition and arrangement of elements
-- **Style**: Visual aesthetic (photography, illustration, flat design, etc.)
-- **Visuals**: Key visual elements, colors, subjects, setting
-- **Text/Copy**: Headline text, CTA text, tagline (actual text to render)
-- **Tone**: Emotional tone and mood
-- **Logo**: Placement, size, and treatment of the brand logo (if provided)
+Each concept_detail must be an object, not a multi-line string. Keep every value concise and avoid newline characters inside JSON strings.
 
-Do NOT include image tags or URLs. The concept_detail will be used as an image generation prompt.`
+Do NOT include image tags or URLs. The concept_detail will be converted into an image generation prompt.`,
+    maxTokens: 8192,
+    stateless: true
 });
+
+type ParsedImageConcept = Omit<ImageConcept, 'imageDataUrl' | 'status'>;
+
+interface ConceptParseResult<TConcept> {
+    concepts: TConcept[];
+    ok: boolean;
+    error?: string;
+}
 
 export interface ImageGenerationResult {
     generationResult: GenerationResult;
@@ -164,8 +178,21 @@ class ImageGenerationToolWrapper {
 
         // Step 3: Generate concepts via LLM
         const conceptPrompt = this.buildConceptPrompt(item, report, visualAnalysis, logoUrl, numConcepts);
-        const conceptsJson = await conceptGeneratorTool.process(conceptPrompt);
-        const parsedConcepts = this.parseConcepts(conceptsJson, numConcepts);
+        let conceptsJson = await conceptGeneratorTool.process(conceptPrompt);
+        let parseResult = this.parseConcepts(conceptsJson, numConcepts, item);
+
+        if (!parseResult.ok) {
+            logger.debug('ImageGenerationTool', 'Retrying concept generation after invalid JSON', {
+                itemName: item.name,
+                error: parseResult.error
+            });
+            const retryPrompt = this.buildRetryConceptPrompt(conceptPrompt, conceptsJson, parseResult.error || 'Invalid JSON', numConcepts);
+            const retryJson = await conceptGeneratorTool.process(retryPrompt);
+            conceptsJson = `${conceptsJson}\n\n--- RETRY RESPONSE ---\n${retryJson}`;
+            parseResult = this.parseConcepts(retryJson, numConcepts, item);
+        }
+
+        const parsedConcepts = parseResult.concepts;
         const imageResponses: GeneratedImageResponseRecord[] = [];
 
         // Phase 2: Stream concepts with "generating" status (concepts are known, images pending)
@@ -294,40 +321,229 @@ class ImageGenerationToolWrapper {
         return prompt;
     }
 
-    private parseConcepts(raw: string, numConcepts: number): Omit<ImageConcept, 'imageDataUrl' | 'status'>[] {
+    private buildRetryConceptPrompt(originalPrompt: string, invalidResponse: string, error: string, numConcepts: number): string {
+        return `The previous response could not be parsed as valid JSON.
+
+Parse error: ${error}
+
+Regenerate the answer from scratch. Return ONLY one valid JSON object with exactly ${numConcepts} concepts. Keep all strings concise. Do not use markdown fences. Do not use newline characters inside JSON string values.
+
+Original request:
+${originalPrompt.slice(0, 7000)}
+
+Invalid response excerpt:
+${invalidResponse.slice(0, 1200)}`;
+    }
+
+    private parseConcepts(raw: string, numConcepts: number, item: FocusedItemCard): ConceptParseResult<ParsedImageConcept> {
         try {
-            const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-            const parsed = JSON.parse(cleaned);
-            const concepts = parsed.concepts || parsed;
+            const parsed = this.parseJson(raw);
+            const concepts = Array.isArray(parsed) ? parsed : parsed.concepts;
 
             if (!Array.isArray(concepts)) {
                 throw new Error('Concepts is not an array');
             }
 
-            return concepts.slice(0, numConcepts).map((c: any) => ({
-                concept_name: c.concept_name || 'Untitled',
-                concept_description: c.concept_description || '',
-                concept_summary: c.concept_summary || '',
-                concept_detail: c.concept_detail || '',
-                personas: Array.isArray(c.personas) ? c.personas : [],
-                creative_tags: {
-                    ad_angles: Array.isArray(c.creative_tags?.ad_angles) ? c.creative_tags.ad_angles : [],
-                    emotion: Array.isArray(c.creative_tags?.emotion) ? c.creative_tags.emotion : [],
-                    themes: Array.isArray(c.creative_tags?.themes) ? c.creative_tags.themes : []
-                }
-            }));
+            const normalizedConcepts = concepts
+                .slice(0, numConcepts)
+                .map((concept: any, index: number) => this.normalizeConcept(concept, index, item));
+
+            return {
+                concepts: this.ensureConceptCount(normalizedConcepts, numConcepts, item),
+                ok: true
+            };
         } catch (e: any) {
             logger.log('ERROR', { component: 'ImageGenerationTool', action: 'PARSE' }, e.message);
-            // Fallback: generate a single generic concept
-            return [{
-                concept_name: 'Fresh Take',
-                concept_description: 'A new creative direction',
-                concept_summary: 'Reimagined version of the original ad with improved visual appeal.',
-                concept_detail: '- Layout: Clean, centered composition\n- Style: Modern photography\n- Visuals: Bold colors, product focus\n- Text/Copy: "Discover Something New"\n- Tone: Energetic and inviting',
-                personas: ['General audience'],
-                creative_tags: { ad_angles: ['product-focus'], emotion: ['excitement'], themes: ['discovery'] }
-            }];
+            return {
+                concepts: this.buildFallbackConcepts(numConcepts, item),
+                ok: false,
+                error: e.message
+            };
         }
+    }
+
+    private parseJson(raw: string) {
+        const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        try {
+            return JSON.parse(cleaned);
+        } catch {
+            const firstObject = cleaned.indexOf('{');
+            const firstArray = cleaned.indexOf('[');
+            const starts = [firstObject, firstArray].filter(index => index >= 0);
+            if (starts.length === 0) {
+                throw new Error('No JSON object or array found');
+            }
+
+            const start = Math.min(...starts);
+            const end = cleaned[start] === '{' ? cleaned.lastIndexOf('}') : cleaned.lastIndexOf(']');
+            if (end <= start) {
+                throw new Error('No complete JSON object or array found');
+            }
+
+            return JSON.parse(cleaned.slice(start, end + 1));
+        }
+    }
+
+    private normalizeConcept(concept: any, index: number, item: FocusedItemCard): ParsedImageConcept {
+        const fallback = this.buildFallbackConcept(index, item);
+        const tags = concept?.creative_tags || {};
+
+        return {
+            concept_name: this.normalizeString(concept?.concept_name, fallback.concept_name),
+            concept_description: this.normalizeString(concept?.concept_description, fallback.concept_description),
+            concept_summary: this.normalizeString(concept?.concept_summary, fallback.concept_summary),
+            concept_detail: this.normalizeConceptDetail(concept?.concept_detail, fallback.concept_detail),
+            personas: this.normalizeStringArray(concept?.personas, fallback.personas),
+            creative_tags: {
+                ad_angles: this.normalizeStringArray(tags.ad_angles, fallback.creative_tags.ad_angles),
+                emotion: this.normalizeStringArray(tags.emotion, fallback.creative_tags.emotion),
+                themes: this.normalizeStringArray(tags.themes, fallback.creative_tags.themes)
+            }
+        };
+    }
+
+    private normalizeConceptDetail(value: any, fallback: string): string {
+        if (typeof value === 'string' && value.trim()) {
+            return value.trim();
+        }
+
+        if (!value || typeof value !== 'object') {
+            return fallback;
+        }
+
+        const textCopy = value.text_copy || value.textCopy || {};
+        const copyParts = [
+            this.normalizeString(textCopy.headline, ''),
+            this.normalizeString(textCopy.cta, '')
+        ].filter(Boolean);
+
+        const detailRows = [
+            ['Layout', value.layout],
+            ['Style', value.style],
+            ['Visuals', value.visuals],
+            ['Text/Copy', copyParts.join(' / ') || value.text_copy || value.copy],
+            ['Tone', value.tone],
+            ['Logo', value.logo]
+        ];
+
+        const detail = detailRows
+            .map(([label, detailValue]) => [label, this.normalizeString(detailValue, '')])
+            .filter(([, detailValue]) => detailValue)
+            .map(([label, detailValue]) => `- ${label}: ${detailValue}`)
+            .join('\n');
+
+        return detail || fallback;
+    }
+
+    private ensureConceptCount(concepts: ParsedImageConcept[], numConcepts: number, item: FocusedItemCard): ParsedImageConcept[] {
+        const result = [...concepts];
+
+        while (result.length < numConcepts) {
+            result.push(this.buildFallbackConcept(result.length, item));
+        }
+
+        return result.slice(0, numConcepts);
+    }
+
+    private buildFallbackConcepts(numConcepts: number, item: FocusedItemCard): ParsedImageConcept[] {
+        return Array.from({ length: numConcepts }, (_, index) => this.buildFallbackConcept(index, item));
+    }
+
+    private buildFallbackConcept(index: number, item: FocusedItemCard): ParsedImageConcept {
+        const sourceName = item.name || 'the source ad';
+        const concepts = [
+            {
+                name: 'Proof First',
+                description: 'Lead with the strongest proof',
+                angle: 'proof-led positioning',
+                emotion: 'confidence',
+                theme: 'validation',
+                detail: `- Layout: Product hero on the left with a crisp proof badge on the right
+- Style: Clean performance-ad photography with sharp contrast
+- Visuals: ${sourceName} reimagined with bold metric callouts and product close-ups
+- Text/Copy: "Built To Prove It" / "Shop Now"
+- Tone: Credible, focused, high-conviction`
+            },
+            {
+                name: 'Daily Upgrade',
+                description: 'Show the everyday use case',
+                angle: 'lifestyle transformation',
+                emotion: 'relief',
+                theme: 'daily routine',
+                detail: `- Layout: Before-and-after lifestyle sequence in a simple grid
+- Style: Natural light, premium but approachable
+- Visuals: ${sourceName} placed in a realistic daily moment with clear product benefit cues
+- Text/Copy: "Upgrade The Everyday" / "See The Difference"
+- Tone: Practical, optimistic, human`
+            },
+            {
+                name: 'Creator Demo',
+                description: 'Make the product feel tested',
+                angle: 'creator demonstration',
+                emotion: 'trust',
+                theme: 'demo',
+                detail: `- Layout: Creator-style demo frame with product benefit overlays
+- Style: Native social creative with polished lighting
+- Visuals: Hands-on product interaction inspired by ${sourceName}
+- Text/Copy: "See Why It Works" / "Try It Today"
+- Tone: Direct, useful, convincing`
+            },
+            {
+                name: 'Bold Offer',
+                description: 'Convert attention into action',
+                angle: 'offer spotlight',
+                emotion: 'urgency',
+                theme: 'conversion',
+                detail: `- Layout: Centered product shot with a strong offer panel and clear CTA
+- Style: High-contrast digital ad with minimal distractions
+- Visuals: ${sourceName} reframed around the product, offer, and reason to act now
+- Text/Copy: "Your Next Favorite" / "Get Started"
+- Tone: Energetic, clear, conversion-focused`
+            }
+        ];
+        const selected = concepts[index % concepts.length];
+
+        return {
+            concept_name: selected.name,
+            concept_description: selected.description,
+            concept_summary: `${selected.name} reframes ${sourceName} around ${selected.angle}.`,
+            concept_detail: selected.detail,
+            personas: ['Primary buyer', 'High-intent shopper'],
+            creative_tags: {
+                ad_angles: [selected.angle],
+                emotion: [selected.emotion],
+                themes: [selected.theme]
+            }
+        };
+    }
+
+    private normalizeString(value: any, fallback: string): string {
+        if (typeof value === 'string') {
+            const normalized = value.replace(/\s+/g, ' ').trim();
+            return normalized || fallback;
+        }
+
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+
+        return fallback;
+    }
+
+    private normalizeStringArray(value: any, fallback: string[]): string[] {
+        if (Array.isArray(value)) {
+            const normalized = value
+                .map(item => this.normalizeString(item, ''))
+                .filter(Boolean);
+            return normalized.length > 0 ? normalized : fallback;
+        }
+
+        if (typeof value === 'string' && value.trim()) {
+            return [value.trim()];
+        }
+
+        return fallback;
     }
 
     private async generateImage(

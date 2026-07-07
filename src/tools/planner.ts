@@ -1,6 +1,99 @@
 import { Tool } from '../tool-base';
 import { GlobalContext, Plan, PlanStep, getContextSummary, generateId } from '../context';
 
+const FOLLOW_UP_CREATION_TASK_IDS = new Set([
+    'adapt-competitor-concepts',
+    'scale-iterate-winners',
+    'generate-gap-concepts'
+]);
+const FOLLOW_UP_COMPARISON_TASK_IDS = new Set([
+    'competitor-gaps-next-steps'
+]);
+
+const FRESH_DATA_PATTERN = /\b(fresh|latest|current|new data|new analysis|rerun|re-run|refresh|today|yesterday|last\s+\d+\s+days?|meta ads account|own account|audit)\b/i;
+const CREATION_FOLLOW_UP_PATTERN = /\b(generate|create|make|adapt|iterate|scale|variant|concept|new ads?|fill .*gap|copy .*concept)\b/i;
+const COMPETITOR_STEP_PATTERN = /\b(competitor|discovery|inspiration|market)\b/i;
+
+const hasReusablePreviousContext = (context: GlobalContext) =>
+    Boolean(context.previousRun) && (context.focusItemSets.length > 0 || context.creativeReports.length > 0 || context.analysisReports.length > 0);
+
+const shouldOptimizeAsFollowUp = (userInput: string, context: GlobalContext) => {
+    if (!hasReusablePreviousContext(context)) {
+        return false;
+    }
+
+    const taskId = context.runMetadata?.taskId || '';
+    if (FOLLOW_UP_COMPARISON_TASK_IDS.has(taskId)) {
+        return true;
+    }
+
+    if (taskId && (FOLLOW_UP_CREATION_TASK_IDS.has(taskId) || taskId.startsWith('generated-'))) {
+        return true;
+    }
+
+    return CREATION_FOLLOW_UP_PATTERN.test(userInput) && !FRESH_DATA_PATTERN.test(userInput);
+};
+
+const optimizeFollowUpPlan = (plan: Plan, userInput: string, context: GlobalContext): Plan => {
+    if (!shouldOptimizeAsFollowUp(userInput, context)) {
+        return plan;
+    }
+
+    const hasReusableFocusItems = context.focusItemSets.length > 0;
+    const hasReusableCreativeReports = context.creativeReports.length > 0;
+    const hasReusableAnalysisReports = context.analysisReports.length > 0 || context.consolidationReports.length > 0;
+    const hasGenerationStep = plan.steps.some((step) => step.tool === 'generateAdVariations');
+    const hasConsolidationStep = plan.steps.some((step) => step.tool === 'consolidateFindings');
+    const isComparisonFollowUp = FOLLOW_UP_COMPARISON_TASK_IDS.has(context.runMetadata?.taskId || '');
+
+    const optimizedSteps = plan.steps.filter((step) => {
+        if (isComparisonFollowUp) {
+            if (step.tool === 'discoveryQuery') {
+                return false;
+            }
+
+            if (
+                (step.tool === 'dataAnalysis' || step.tool === 'focusItems' || step.tool === 'creativeInsights') &&
+                COMPETITOR_STEP_PATTERN.test(step.description)
+            ) {
+                return false;
+            }
+
+            return true;
+        }
+
+        if ((step.tool === 'dataQuery' || step.tool === 'discoveryQuery') && (hasReusableCreativeReports || hasReusableAnalysisReports)) {
+            return false;
+        }
+
+        if (step.tool === 'dataAnalysis' && (hasReusableAnalysisReports || hasReusableCreativeReports) && (hasGenerationStep || hasConsolidationStep)) {
+            return false;
+        }
+
+        if (step.tool === 'focusItems' && hasReusableFocusItems) {
+            return false;
+        }
+
+        if (step.tool === 'creativeInsights' && hasReusableCreativeReports && hasGenerationStep) {
+            return false;
+        }
+
+        return true;
+    });
+
+    if (optimizedSteps.length === 0) {
+        return plan;
+    }
+
+    return {
+        ...plan,
+        steps: optimizedSteps.map((step, index) => ({
+            ...step,
+            id: String(index + 1)
+        }))
+    };
+};
+
 /**
  * Planner Tool
  * 
@@ -44,7 +137,7 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 
 ### 4. focusItems
 - **Purpose**: Select specific items from the latest dataset for detailed analysis (works with BOTH own ads and competitor ads)
-- **Capabilities**: Pick items based on criteria (top N, specific selection, all items), capped at 3 focused items per run
+- **Capabilities**: Pick items based on criteria (top N, specific selection, all items), capped at 4 focused items per run
 - **Output**: Returns focus item cards with thumbnails and key info
 - **Use when**: Need to narrow down to specific ads for creative analysis
 
@@ -62,10 +155,10 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 
 ### 7. generateAdVariations
 - **Purpose**: Generate new ad concept variations (images and video scripts) based on creative insights
-- **Capabilities**: For each analyzed item — generates multiple ad concepts with AI-generated images (for image ads) or video scripts (for video ads)
-- **Output**: Image thumbnails row (4 concepts) for image ads, or video script cards (4 concepts) for video ads
+- **Capabilities**: For each analyzed item — generates 4 ad concepts with AI-generated images (for image ads) or 4 video scripts (for video ads)
+- **Output**: Defaults to 1 creative reference, producing 4 total generated outputs. Image ads show image thumbnails; video ads show video script cards.
 - **Use when**: User wants to generate new ad ideas, create ad variations, iterate on existing creatives, get inspiration for new ads
-- **REQUIRES**: Must run AFTER creativeInsights — needs creative reports in context
+- **REQUIRES**: Must run AFTER creativeInsights — needs creative reports in context. The execution layer also requires the Brand Guidelines integration for every generation run; do not add a separate integrations step solely for Brand Guidelines.
 
 ### 8. integrations
 - **Purpose**: Access connected workspace integrations or return integration instructions when they are not connected
@@ -95,7 +188,7 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 3. Use focusItems to select specific competitor ads for deep analysis
 4. Use creativeInsights to analyze their creative approach
 5. Use consolidateFindings to extract learnings and recommendations
-6. If the user asks for top angles, formats, creative trends, competitor inspiration, or industry examples without explicitly asking to compare against "my ads", "our ads", or a named connected ad account, do NOT use dataQuery or integrations. Use discoveryQuery only as the source query.
+6. If the user asks for top spending hooks, competitor spend signals, top angles, formats, creative trends, competitor inspiration, or industry examples without explicitly asking to compare against "my ads", "our ads", or a named connected ad account, do NOT use dataQuery or integrations. Use discoveryQuery only as the source query.
 
 ### For Competitive Comparison:
 1. Analyze your own ads first (dataQuery → dataAnalysis → focusItems → creativeInsights)
@@ -107,7 +200,7 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 1. First analyze the ads (dataQuery → dataAnalysis → focusItems → creativeInsights)
 2. Then generate variations with generateAdVariations as the final step
 3. generateAdVariations ALWAYS comes after creativeInsights — it needs creative reports
-4. Default to a single source ad for variation generation unless the user explicitly asks for multiple ads
+4. Default to 1 source ad/creative reference for variation generation unless the user explicitly asks for multiple references
 
 ### For Integration Requests:
 1. Use integrations when the user explicitly asks for Meta Ads, TikTok Ads, Google Ads, Shopify, Google Analytics, HubSpot, or Salesforce context/data
@@ -122,6 +215,12 @@ This two-step process is critical: ALWAYS derive a clear, actionable objective b
 2. If the requested action depends on analysis, run the analysis steps first, then run integrationAction as the final step
 3. If the integration is not connected, integrationAction will return a connection-required result and pause the task
 4. For Slack delivery, the final step must be integrationAction with a description that clearly says to send the summary message to Slack
+
+### Follow-up Reuse Rules:
+- If CURRENT CONTEXT includes "Reusable Previous Run Context", treat listed focus items, reports, completed tools, and artifacts as already available working memory.
+- Do not repeat equivalent discoveryQuery, dataQuery, dataAnalysis, focusItems, or creativeInsights steps when the new task can use the reusable previous focus items/reports/artifacts.
+- For follow-up creation tasks such as adapting concepts, iterating winners, generating variants, or filling gaps, prefer starting from generateAdVariations when reusable focus items and creative reports are available.
+- Only rerun upstream query/analysis/selection steps if the user explicitly asks for fresh/latest/current data, a new comparison, or a different source of truth.
 
 ### General Rules:
 - Keep plans concise - avoid redundant steps
@@ -165,11 +264,11 @@ User: "Compare my top spend and top ROAS ads and formulate a winning formula"
     "steps": [
         { "id": "1", "tool": "dataQuery", "description": "Query top ads by spend (highest spenders)" },
         { "id": "2", "tool": "dataAnalysis", "description": "Analyze spend patterns and metrics" },
-        { "id": "3", "tool": "focusItems", "description": "Select top 3 high-spend ads for analysis" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 4 high-spend ads for analysis" },
         { "id": "4", "tool": "creativeInsights", "description": "Analyze creative elements of high-spend ads" },
         { "id": "5", "tool": "dataQuery", "description": "Query top ads by ROAS (best performers)" },
         { "id": "6", "tool": "dataAnalysis", "description": "Analyze ROAS patterns and metrics" },
-        { "id": "7", "tool": "focusItems", "description": "Select top 3 high-ROAS ads for analysis" },
+        { "id": "7", "tool": "focusItems", "description": "Select top 4 high-ROAS ads for analysis" },
         { "id": "8", "tool": "creativeInsights", "description": "Analyze creative elements of high-ROAS ads" },
         { "id": "9", "tool": "consolidateFindings", "description": "Compare patterns and create winning formula" }
     ]
@@ -181,7 +280,7 @@ User: "Why does my top ROAS ads perform so well?"
     "steps": [
         { "id": "1", "tool": "dataQuery", "description": "Query top ads by ROAS" },
         { "id": "2", "tool": "dataAnalysis", "description": "Analyze ROAS performance patterns" },
-        { "id": "3", "tool": "focusItems", "description": "Select top 3 performers" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 4 performers" },
         { "id": "4", "tool": "creativeInsights", "description": "Deep dive into creative elements" },
         { "id": "5", "tool": "consolidateFindings", "description": "Identify common success patterns" }
     ]
@@ -210,7 +309,7 @@ User: "Show me my video ad performance"
     "steps": [
         { "id": "1", "tool": "dataQuery", "description": "Query video ads sorted by spend" },
         { "id": "2", "tool": "dataAnalysis", "description": "Analyze video ad performance patterns" },
-        { "id": "3", "tool": "focusItems", "description": "Select top 3 video ads" }
+        { "id": "3", "tool": "focusItems", "description": "Select top 4 video ads" }
     ]
 }
 
@@ -229,7 +328,7 @@ User: "Get some video ad inspiration from competitors"
     "steps": [
         { "id": "1", "tool": "discoveryQuery", "description": "Query competitor video ads sorted by latest" },
         { "id": "2", "tool": "dataAnalysis", "description": "Summarize video ad trends and themes" },
-        { "id": "3", "tool": "focusItems", "description": "Select top 3 most interesting video ads" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 4 most interesting video ads" },
         { "id": "4", "tool": "creativeInsights", "description": "Deep dive into video creative elements, hooks, and storytelling" }
     ]
 }
@@ -240,7 +339,7 @@ User: "What are the longest running competitor campaigns?"
     "steps": [
         { "id": "1", "tool": "discoveryQuery", "description": "Query competitor ads sorted by longest running" },
         { "id": "2", "tool": "dataAnalysis", "description": "Analyze campaign longevity patterns" },
-        { "id": "3", "tool": "focusItems", "description": "Select top 3 longest running ads" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 4 longest running ads" },
         { "id": "4", "tool": "creativeInsights", "description": "Analyze what makes these campaigns evergreen" },
         { "id": "5", "tool": "consolidateFindings", "description": "Extract evergreen campaign strategies" }
     ]
@@ -264,11 +363,11 @@ User: "Compare my ads to what Adidas is doing"
     "steps": [
         { "id": "1", "tool": "dataQuery", "description": "Query your top performing ads by ROAS" },
         { "id": "2", "tool": "dataAnalysis", "description": "Analyze your ad performance patterns" },
-        { "id": "3", "tool": "focusItems", "description": "Select your top 3 ads" },
+        { "id": "3", "tool": "focusItems", "description": "Select your top 4 ads" },
         { "id": "4", "tool": "creativeInsights", "description": "Analyze your creative elements" },
         { "id": "5", "tool": "discoveryQuery", "description": "Query Adidas latest ads" },
         { "id": "6", "tool": "dataAnalysis", "description": "Analyze Adidas ad themes and approach" },
-        { "id": "7", "tool": "focusItems", "description": "Select top 3 Adidas ads" },
+        { "id": "7", "tool": "focusItems", "description": "Select top 4 Adidas ads" },
         { "id": "8", "tool": "creativeInsights", "description": "Analyze Adidas creative elements" },
         { "id": "9", "tool": "consolidateFindings", "description": "Compare your approach vs Adidas and identify opportunities" }
     ]
@@ -293,7 +392,7 @@ User: "ok"
     "steps": [
         { "id": "1", "tool": "dataQuery", "description": "Query image ads sorted by ROAS" },
         { "id": "2", "tool": "dataAnalysis", "description": "Analyze image ad performance patterns" },
-        { "id": "3", "tool": "focusItems", "description": "Select top 3 image ads" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 4 image ads" },
         { "id": "4", "tool": "creativeInsights", "description": "Analyze creative elements of image ads" },
         { "id": "5", "tool": "consolidateFindings", "description": "Compare social proof patterns between top ads and image ads" }
     ]
@@ -316,7 +415,7 @@ User: "Create new ad variations for my best performing video ads"
     "steps": [
         { "id": "1", "tool": "dataQuery", "description": "Query top video ads by ROAS" },
         { "id": "2", "tool": "dataAnalysis", "description": "Analyze video ad performance" },
-        { "id": "3", "tool": "focusItems", "description": "Select top 3 video ads" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 4 video ads" },
         { "id": "4", "tool": "creativeInsights", "description": "Analyze video creative elements and scripts" },
         { "id": "5", "tool": "generateAdVariations", "description": "Generate new video script concepts based on analysis" }
     ]
@@ -356,7 +455,7 @@ User: "Pull Google Ads context and keep analyzing my top creatives"
     "steps": [
         { "id": "1", "tool": "integrations", "description": "Retrieve Google Ads integration context or return integration instructions if Google Ads is not connected" },
         { "id": "2", "tool": "dataQuery", "description": "Query top performing ads by ROAS" },
-        { "id": "3", "tool": "focusItems", "description": "Select top 3 ads" },
+        { "id": "3", "tool": "focusItems", "description": "Select top 4 ads" },
         { "id": "4", "tool": "creativeInsights", "description": "Analyze the creative elements of the top ads" }
     ]
 }
@@ -393,6 +492,7 @@ ${contextSummary}
 INSTRUCTIONS:
 1. First, derive a clear objective from the user input and narrator context
 2. Then, create an execution plan with specific steps
+3. If the current context includes FOLLOW-UP HANDOFF CONTEXT or Reusable Previous Run Context, treat the new request as a continuation. Reuse prior findings/artifacts and avoid repeating completed discovery or analysis unless the new task requires fresh data.
 `;
 
         try {
@@ -424,7 +524,7 @@ INSTRUCTIONS:
                 createdAt: Date.now()
             };
 
-            return plan;
+            return optimizeFollowUpPlan(plan, userInput, context);
 
         } catch (error) {
             console.error('[Planner] Error:', error);

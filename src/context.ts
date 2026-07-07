@@ -1,5 +1,49 @@
-import { IntegrationInfo, FocusedItemCard, TaskStatus, BrandInfo, ImageConcept, VideoConcept, FrontendIntegrationInfo, WorkspaceIntegrationInfo, IntegrationResultRecord } from './types';
+import { IntegrationInfo, FocusedItemCard, TaskStatus, BrandInfo, ImageConcept, VideoConcept, FrontendIntegrationInfo, WorkspaceIntegrationInfo, IntegrationResultRecord, SummaryLayout, RunSummary } from './types';
 import { resolveIntegrations } from './integrations';
+
+export interface RunMetadataContext {
+    taskId?: string;
+    summaryLayout?: SummaryLayout;
+    sourceSessionId?: string;
+}
+
+export interface PreviousRunStepContext {
+    tool: string;
+    description: string;
+}
+
+export interface PreviousRunReportContext {
+    id: string;
+    reportType: 'performance' | 'creative' | 'common';
+    title: string;
+    content: string;
+    itemId?: string;
+    itemName?: string;
+    itemData?: {
+        thumbnail?: string;
+        displayFormat?: 'image' | 'video';
+        videoLength?: string;
+        metrics?: Record<string, number | undefined>;
+    };
+}
+
+export interface PreviousRunArtifactContext {
+    id: string;
+    type: 'report' | 'focus_items' | 'image_concepts' | 'video_concepts' | 'summary';
+    title: string;
+}
+
+export interface PreviousRunContext {
+    sourceSessionId: string;
+    sourceTaskId?: string;
+    title: string;
+    userRequest?: string;
+    summary?: RunSummary;
+    completedSteps: PreviousRunStepContext[];
+    artifacts: PreviousRunArtifactContext[];
+    focusItems: FocusedItemCard[];
+    reports: PreviousRunReportContext[];
+}
 
 /**
  * Query parameters for data fetching
@@ -193,6 +237,12 @@ export interface GlobalContext {
     
     // User's original input
     userInput: string;
+
+    // Optional run-level metadata from the frontend
+    runMetadata?: RunMetadataContext;
+
+    // Structured context copied from the source run when a task is launched as a follow-up
+    previousRun?: PreviousRunContext;
     
     // Data from dataQuery tool (can have multiple datasets)
     dataSets: DataSet[];
@@ -236,6 +286,66 @@ export interface UserContext {
     brands?: BrandInfo[];
     integrations?: FrontendIntegrationInfo[];
     conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+    runMetadata?: RunMetadataContext;
+    previousRun?: PreviousRunContext;
+}
+
+/**
+ * Hydrate reusable previous-run artifacts into the active run context.
+ * This lets follow-up plans use prior focus items/reports without rerunning upstream tools.
+ */
+export function applyPreviousRunContext(context: GlobalContext, previousRun?: PreviousRunContext): void {
+    context.previousRun = previousRun;
+    if (!previousRun) {
+        return;
+    }
+
+    const timestamp = Date.now();
+    const focusSetId = `previous-${previousRun.sourceSessionId}-focus`;
+    context.focusItemSets = context.focusItemSets.filter((set) => !set.id.startsWith('previous-'));
+    context.creativeReports = context.creativeReports.filter((report) => !report.id.startsWith('previous-'));
+    context.consolidationReports = context.consolidationReports.filter((report) => !report.id.startsWith('previous-'));
+    context.analysisReports = context.analysisReports.filter((report) => !report.id.startsWith('previous-'));
+
+    if (previousRun.focusItems.length > 0) {
+        context.focusItemSets.push({
+            id: focusSetId,
+            summary: `Reusable focus items from ${previousRun.title}`,
+            items: previousRun.focusItems,
+            dataSetId: `previous-${previousRun.sourceSessionId}`,
+            timestamp
+        });
+    }
+
+    previousRun.reports.forEach((report) => {
+        if (report.reportType === 'creative') {
+            context.creativeReports.push({
+                id: `previous-${report.id}`,
+                focusSetId,
+                itemId: report.itemId || report.id,
+                itemName: report.itemName || report.title,
+                content: report.content,
+                timestamp
+            });
+            return;
+        }
+
+        if (report.reportType === 'common') {
+            context.consolidationReports.push({
+                id: `previous-${report.id}`,
+                content: report.content,
+                timestamp
+            });
+            return;
+        }
+
+        context.analysisReports.push({
+            id: `previous-${report.id}`,
+            dataSetId: `previous-${previousRun.sourceSessionId}`,
+            content: report.content,
+            timestamp
+        });
+    });
 }
 
 /**
@@ -244,11 +354,13 @@ export interface UserContext {
 export function createEmptyContext(integration: IntegrationInfo, userInput: string = '', userContext?: UserContext): GlobalContext {
     const integrationInputs = userContext?.integrations || [];
 
-    return {
+    const context: GlobalContext = {
         integration,
         followedBrands: userContext?.brands || [],
         integrations: resolveIntegrations(integrationInputs),
         userInput,
+        runMetadata: userContext?.runMetadata,
+        previousRun: userContext?.previousRun,
         dataSets: [],
         discoveryDataSets: [],
         analysisReports: [],
@@ -261,6 +373,9 @@ export function createEmptyContext(integration: IntegrationInfo, userInput: stri
         conversationHistory: userContext?.conversationHistory || [],
         currentPlan: null
     };
+
+    applyPreviousRunContext(context, userContext?.previousRun);
+    return context;
 }
 
 /**
@@ -413,12 +528,42 @@ export function getContextSummary(context: GlobalContext): string {
             parts.push(`  [${i + 1}] ${result.integrationName} (${result.mode})`);
         });
     }
+
+    if (context.previousRun) {
+        parts.push(`\nReusable Previous Run Context:`);
+        parts.push(`  Title: ${context.previousRun.title}`);
+        if (context.previousRun.sourceTaskId) {
+            parts.push(`  Source task id: ${context.previousRun.sourceTaskId}`);
+        }
+        if (context.previousRun.summary?.overview) {
+            parts.push(`  Summary: ${context.previousRun.summary.overview}`);
+        }
+        const completedTools = [...new Set(context.previousRun.completedSteps.map((step) => step.tool))];
+        if (completedTools.length > 0) {
+            parts.push(`  Completed tools available to reuse: ${completedTools.join(', ')}`);
+        }
+        if (context.previousRun.completedSteps.length > 0) {
+            parts.push(`  Completed steps:`);
+            context.previousRun.completedSteps.slice(0, 6).forEach((step, i) => {
+                parts.push(`    [${i + 1}] ${step.tool}: ${step.description}`);
+            });
+        }
+        if (context.previousRun.focusItems.length > 0) {
+            parts.push(`  Reusable focus items: ${context.previousRun.focusItems.map((item) => item.name).join(', ')}`);
+        }
+        if (context.previousRun.reports.length > 0) {
+            parts.push(`  Reusable reports: ${context.previousRun.reports.map((report) => `${report.reportType}: ${report.title}`).join('; ')}`);
+        }
+        if (context.previousRun.artifacts.length > 0) {
+            parts.push(`  Reusable artifacts: ${context.previousRun.artifacts.map((artifact) => artifact.title).join('; ')}`);
+        }
+    }
     
     if (context.conversationHistory.length > 0) {
         parts.push(`\nRecent Conversation:`);
         const recent = context.conversationHistory.slice(-4);
         recent.forEach(msg => {
-            const preview = msg.content.length > 100 ? msg.content.slice(0, 100) + '...' : msg.content;
+            const preview = msg.content.length > 650 ? msg.content.slice(0, 650) + '...' : msg.content;
             parts.push(`  ${msg.role.toUpperCase()}: ${preview}`);
         });
     }

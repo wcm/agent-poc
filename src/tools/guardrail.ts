@@ -152,7 +152,7 @@ CURRENT CONTEXT:
 ${contextSummary}
 
 CONVERSATION HISTORY (last 4 messages):
-${context.conversationHistory.slice(-4).map(m => `${m.role.toUpperCase()}: ${m.content.slice(0, 200)}`).join('\n') || 'None'}
+${context.conversationHistory.slice(-4).map(m => `${m.role.toUpperCase()}: ${m.content.slice(0, 500)}`).join('\n') || 'None'}
 
 Analyze the user input and return your decision.
 `;

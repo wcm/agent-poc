@@ -9,6 +9,8 @@ export interface GenerateAdVariationsResult {
 }
 
 const DEFAULT_CONCEPTS_PER_SOURCE = 4;
+const DEFAULT_REFERENCE_COUNT = 1;
+const MAX_REFERENCE_COUNT = 3;
 
 /**
  * GenerateAdVariations Tool
@@ -54,15 +56,15 @@ class GenerateAdVariationsToolWrapper {
 
     private getItemsToProcess(focusItems: FocusedItemCard[], stepDescription: string, userInput: string) {
         if (this.shouldProcessAllItems(userInput) || this.shouldProcessAllItems(stepDescription)) {
-            return focusItems;
+            return focusItems.slice(0, MAX_REFERENCE_COUNT);
         }
 
         const requestedCount = this.extractRequestedItemCount(userInput) ?? this.extractRequestedItemCount(stepDescription);
         if (requestedCount !== null) {
-            return focusItems.slice(0, Math.max(1, requestedCount));
+            return focusItems.slice(0, Math.min(MAX_REFERENCE_COUNT, Math.max(1, requestedCount)));
         }
 
-        return focusItems.slice(0, 1);
+        return focusItems.slice(0, DEFAULT_REFERENCE_COUNT);
     }
 
     async execute(

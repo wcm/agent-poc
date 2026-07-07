@@ -11,6 +11,12 @@ export interface ToolConfig {
     systemPrompt: string;
     apiKey?: string;
     maxTokens?: number;
+    /**
+     * Tool instances are singletons, so history is shared across runs.
+     * Keep calls stateless by default; opt into stateful behavior only for
+     * tools that intentionally manage their own conversation memory.
+     */
+    stateless?: boolean;
 }
 
 export class Tool {
@@ -31,12 +37,20 @@ export class Tool {
         
         logger.toolInput(toolName, input);
 
-        this.history.push({ role: 'user', content: input });
+        const useHistory = this.config.stateless === false;
+
+        if (useHistory) {
+            this.history.push({ role: 'user', content: input });
+        }
 
         try {
+            const messages = useHistory
+                ? [{ role: 'system', content: this.config.systemPrompt }, ...this.history]
+                : [{ role: 'system', content: this.config.systemPrompt }, { role: 'user', content: input }];
+
             const response: any = await this.client.chat.send({
                 model: this.config.model,
-                messages: [{ role: 'system', content: this.config.systemPrompt }, ...this.history],
+                messages,
                 max_tokens: this.config.maxTokens || 4096,
             } as any, {
                 headers: {
@@ -52,7 +66,9 @@ export class Tool {
                 throw new Error('Empty response from OpenRouter/Model');
             }
 
-            this.history.push({ role: 'assistant', content: output });
+            if (useHistory) {
+                this.history.push({ role: 'assistant', content: output });
+            }
             
             const duration = Date.now() - startTime;
             logger.toolOutput(toolName, output, duration);
@@ -97,4 +113,3 @@ export class Tool {
         this.history = [];
     }
 }
-

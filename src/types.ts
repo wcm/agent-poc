@@ -81,10 +81,60 @@ export interface RunInsight {
     description: string;
 }
 
+export type SummaryLayout = 'analysis' | 'creation' | 'default';
+export type SummaryChartType = 'line' | 'donut' | 'bar';
+
+export interface SummaryChartPoint {
+    label: string;
+    value: number;
+}
+
+export interface SummaryChartSeries {
+    label: string;
+    points: SummaryChartPoint[];
+    color?: string;
+}
+
+export interface SummaryChart {
+    id: string;
+    type: SummaryChartType;
+    title: string;
+    unit?: string;
+    points: SummaryChartPoint[];
+    series?: SummaryChartSeries[];
+}
+
+export interface SummaryCreative {
+    id: string;
+    title: string;
+    format: 'image' | 'video' | 'concept';
+    description?: string;
+    rationale: string;
+    tags: string[];
+    imageUrl?: string;
+    scriptPreview?: string;
+    scriptNarrations?: string[];
+    scriptSections?: Array<{
+        label: string;
+        narration: string;
+    }>;
+}
+
 export interface RunSummary {
+    layout?: SummaryLayout;
+    overview?: string;
+    error?: {
+        title: string;
+        message: string;
+        details?: string;
+        rawResponse?: string;
+        parsedKeys?: string[];
+    };
     imageUrls: string[];
     insights: RunInsight[];
     nextSteps: RunNextStep[];
+    charts?: SummaryChart[];
+    creatives?: SummaryCreative[];
 }
 
 // Text event - natural language explanations

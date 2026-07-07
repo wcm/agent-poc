@@ -1,15 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, useLayoutEffect } from "react";
-import { ArrowUp, ArrowUpRight, Sparkles, LucideIcon, Plus, ImageIcon, FileText, Heart, Check, Plug, ChevronLeft, ChevronRight, Search, Rocket, ClipboardCheck, Gauge, Clock, Paperclip } from "lucide-react";
+import { AlertTriangle, ArrowUp, ArrowUpRight, Sparkles, LucideIcon, Plus, ImageIcon, FileText, Heart, Check, Plug, ChevronLeft, ChevronRight, Search, Rocket, ClipboardCheck, Gauge, Clock, Paperclip } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Message, StreamedSection, PlanTask, ImageConcept, VideoConcept, Session, RunSummary } from "../../types";
+import { Message, StreamedSection, PlanTask, ImageConcept, VideoConcept, Session, RunSummary, SummaryCreative } from "../../types";
 import StreamingMessage from "./StreamingMessage";
 import { MessageContent } from "../../MessageContent";
 import PlanTimeline from "./PlanTimeline";
 import DocumentPanel, { ChatDocument } from "./DocumentPanel";
 import AssistantStreamingIndicator, { AssistantStreamingPhase } from "./AssistantStreamingIndicator";
 import { getIntegrationDefinitionById, ResolvedIntegration } from "../../integrations/catalog";
-import { findBrandContext, getBrandContext, getBrandContextCompletionScore, getBrandContextPrimaryLogo } from "../../brandContext/catalog";
+import { findBrandContext, getBrandContext, getBrandContextPrimaryLogo } from "../../brandContext/catalog";
 import BrandLogoMark from "../BrandContext/BrandLogoMark";
 import MyConnectionsModal from "./MyConnectionsModal";
 import { RECOMMENDED_HOME_TASKS, RecommendedTaskIcon } from "../../home/recommendedTasks";
@@ -23,7 +23,7 @@ interface ChatInterfaceProps {
 	streamingSections: StreamedSection[];
 	planStates: Map<string, PlanTask[]>;
 	onSendMessage: (message: string) => void;
-	onRunHomeTask?: (message: string) => void;
+	onRunHomeTask?: (message: string, sourceSessionId?: string) => void;
 	onSessionSelect: (sessionId: string) => void;
 	onConnectRequiredIntegration?: (sessionId: string, integrationId: string) => Promise<void> | void;
 	onSetupAutomation?: () => void;
@@ -33,6 +33,7 @@ interface ChatInterfaceProps {
 	myConnections: ResolvedIntegration[];
 	activeIntegrationId: string | null;
 	activeBrand: string;
+	isBrandGuidelinesConnected?: boolean;
 	selectedIntegrationIds?: string[];
 	onSelectedIntegrationIdsChange?: (integrationIds: string[]) => void;
 	onConnectMyConnection: (integrationId: string) => Promise<void> | void;
@@ -203,6 +204,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	myConnections,
 	activeIntegrationId,
 	activeBrand,
+	isBrandGuidelinesConnected = false,
 	selectedIntegrationIds,
 	onSelectedIntegrationIdsChange,
 	onConnectMyConnection,
@@ -264,7 +266,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	const explicitBrandContext = useMemo(() => findBrandContext(activeBrand), [activeBrand]);
 	const activeBrandContext = useMemo(() => explicitBrandContext ?? getBrandContext(activeBrand), [activeBrand, explicitBrandContext]);
 	const activeBrandPrimaryLogo = useMemo(() => getBrandContextPrimaryLogo(activeBrandContext), [activeBrandContext]);
-	const brandContextScore = useMemo(() => (explicitBrandContext ? getBrandContextCompletionScore(explicitBrandContext) : 0), [explicitBrandContext]);
+	const brandContextScore = explicitBrandContext ? (isBrandGuidelinesConnected ? 100 : 68) : 0;
 	const streamingPhase = useMemo<AssistantStreamingPhase>(() => {
 		const hasContentSections = streamingSections.some((section) => section.type !== "plan");
 		return hasContentSections ? "writing" : "reasoning";
@@ -392,6 +394,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, []);
 
+	const runHomeTask = useCallback(
+		(message: string, sourceSessionId?: string) => {
+			if (onRunHomeTask) {
+				onRunHomeTask(message, sourceSessionId);
+				return;
+			}
+			onSendMessage(message);
+		},
+		[onRunHomeTask, onSendMessage]
+	);
+
 	const submitComposerMessage = (sendMessage: (message: string) => void) => {
 		const trimmedInput = input.trim();
 		if (!trimmedInput || isLoading) return;
@@ -407,7 +420,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
 	const handleHomeFixedSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		submitComposerMessage(onRunHomeTask ?? onSendMessage);
+		submitComposerMessage(runHomeTask);
 	};
 
 	const handleComposerKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -420,7 +433,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 	const handleHomeFixedComposerKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
-			submitComposerMessage(onRunHomeTask ?? onSendMessage);
+			submitComposerMessage(runHomeTask);
 		}
 	};
 
@@ -524,6 +537,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 			title: insight.title || "Key Signal",
 			description,
 		};
+	};
+
+	const renderSummaryError = (summary: RunSummary) => {
+		if (!summary.error) {
+			return null;
+		}
+
+		return (
+			<div className="home-summary-error" role="alert">
+				<div className="home-summary-error-header">
+					<AlertTriangle size={18} />
+					<div>
+						<h4>{summary.error.title}</h4>
+						<p>{summary.error.message}</p>
+					</div>
+				</div>
+				{summary.error.details && <p className="home-summary-error-details">{summary.error.details}</p>}
+				{summary.error.rawResponse && (
+					<details className="home-summary-error-raw">
+						<summary>Raw summary response</summary>
+						<pre>{summary.error.rawResponse}</pre>
+					</details>
+				)}
+			</div>
+		);
 	};
 
 	const getSessionSections = (session: Session) => {
@@ -655,12 +693,79 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
 		return (
 			<div className="home-summary-artifacts">
-				<div className="home-summary-column-title">Artifacts</div>
 				{renderSummaryImages(summary)}
 				{renderGeneratedDocuments(generatedDocuments)}
 			</div>
 		);
 	};
+
+	const getCreativeTags = (creative: SummaryCreative) => creative.tags.filter(Boolean).slice(0, 4);
+
+	const getCreativeScriptSections = (creative: SummaryCreative) => {
+		const sections = creative.scriptSections?.filter((section) => section.narration) ?? [];
+		if (sections.length > 0) {
+			return sections.slice(0, 3);
+		}
+
+		const fallbackLabels = ["Hook", "Problem / Desire", "Solution"];
+		const narrations = creative.scriptNarrations?.filter(Boolean) ?? [];
+		const lines = narrations.length > 0 ? narrations.slice(0, 3) : [creative.scriptPreview || creative.description || "Video script concept"];
+		return lines.map((narration, index) => ({
+			label: fallbackLabels[index] ?? `Beat ${index + 1}`,
+			narration,
+		}));
+	};
+
+	const renderSummaryCreative = (creative: SummaryCreative) => {
+		if (creative.format === "video") {
+			return (
+				<div key={creative.id} className="home-summary-creative-card is-video-script">
+					<div className="home-summary-script-card-header">
+						<strong>{creative.title}</strong>
+						<span>Script</span>
+					</div>
+					<div className="home-summary-script-lines">
+						{getCreativeScriptSections(creative).map((section, index) => (
+							<div key={`${creative.id}-line-${index}`} className="home-summary-script-line">
+								<span>{section.label}</span>
+								<p>{section.narration}</p>
+							</div>
+						))}
+					</div>
+					{getCreativeTags(creative).length > 0 && (
+						<div className="home-summary-creative-tags">
+							{getCreativeTags(creative).map((tag) => (
+								<span key={tag}>{tag}</span>
+							))}
+						</div>
+					)}
+				</div>
+			);
+		}
+
+		return (
+			<div key={creative.id} className="home-summary-creative-card">
+				<div className="home-summary-creative-preview">
+					{creative.imageUrl ? <img src={creative.imageUrl} alt="" loading="lazy" /> : <Sparkles size={20} />}
+				</div>
+				<div className="home-summary-creative-copy">
+					<div>
+						<strong>{creative.title}</strong>
+					</div>
+					{getCreativeTags(creative).length > 0 && (
+						<div className="home-summary-creative-tags">
+							{getCreativeTags(creative).map((tag) => (
+								<span key={tag}>{tag}</span>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	};
+
+	const getSummaryCreativeGridClassName = (creatives: SummaryCreative[] = []) =>
+		`home-summary-creatives ${creatives.some((creative) => creative.format === "video") ? "is-script-grid" : ""}`;
 
 	const getRunningSessionPlan = (session: Session) => {
 		for (let index = session.streamingSections.length - 1; index >= 0; index -= 1) {
@@ -1022,6 +1127,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
 	const renderHomeFixedComposer = () => (
 		<div className="home-fixed-composer-area">
+			<a className="home-onboarding-link" href="/onboarding">
+				Open onboarding
+			</a>
 			<form className="home-fixed-composer" onSubmit={handleHomeFixedSubmit}>
 				<div className="composer-overlay-menu home-fixed-attachment-menu" ref={composerMenuRef}>
 					<button
@@ -1058,7 +1166,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 					<BrandLogoMark
 						markText={activeBrandPrimaryLogo?.markText ?? activeBrand.charAt(0)}
 						imageUrl={activeBrandPrimaryLogo?.imageUrl}
-						size="xs"
+						size="lg"
 						label={`${activeBrand} logo`}
 					/>
 					<div className="home-brand-context-copy">
@@ -1105,7 +1213,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 								{RECOMMENDED_HOME_TASKS.map((task) => {
 									const Icon = RECOMMENDED_TASK_ICONS[task.icon];
 									return (
-										<button key={task.id} type="button" className="home-task-card" onClick={() => (onRunHomeTask ?? onSendMessage)(task.prompt)}>
+										<button key={task.id} type="button" className="home-task-card" onClick={() => runHomeTask(task.prompt)}>
 											<span className="home-task-card-watermark" aria-hidden="true">
 												<Icon size={112} strokeWidth={1.35} />
 											</span>
@@ -1167,7 +1275,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 										return null;
 									}
 									const generatedDocuments = getGeneratedDocuments(session);
-									const hasArtifacts = summary.imageUrls.length > 0 || generatedDocuments.length > 0;
+									const layout = summary.layout ?? "default";
+									const isCreationLayout = layout === "creation";
+									const hasCreationCreatives = isCreationLayout && (summary.creatives?.length ?? 0) > 0;
+									const summaryDocuments = isCreationLayout ? [] : generatedDocuments;
+									const hasArtifacts = summary.imageUrls.length > 0 || summaryDocuments.length > 0 || hasCreationCreatives;
 
 									return (
 										<article key={session.id} className="home-insight-card">
@@ -1179,28 +1291,46 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 												{renderHomeCardActions(session.id)}
 											</div>
 
-											<div className={`home-summary-body ${hasArtifacts ? "" : "without-artifacts"}`}>
-												<div className="home-summary-insights-column">
-													<div className="home-summary-column-title">Key insights</div>
-													<div className="home-insight-points">
-														{summary.insights.slice(0, 4).map((insight, index) => {
-															const displayInsight = getDisplayInsight(insight, index);
-															return (
-																<div key={`${displayInsight.title}-${displayInsight.description}`} className="home-insight-point">
-																	<span className="home-insight-point-emoji" aria-hidden="true">
-																		{displayInsight.emoji}
-																	</span>
-																	<div className="home-insight-point-copy">
-																		<h4>{displayInsight.title}</h4>
-																		<ReactMarkdown remarkPlugins={[remarkGfm]}>{displayInsight.description}</ReactMarkdown>
-																	</div>
+											<div className={`home-summary-body ${hasArtifacts ? "" : "without-artifacts"} ${isCreationLayout ? "is-creation" : ""}`}>
+												{isCreationLayout ? (
+													<>
+														{summary.overview && <p className="home-summary-overview">{summary.overview}</p>}
+														{hasCreationCreatives ? (
+															<div className={getSummaryCreativeGridClassName(summary.creatives)}>
+																{summary.creatives?.slice(0, 12).map(renderSummaryCreative)}
+															</div>
+														) : (
+															renderSummaryArtifacts(summary, summaryDocuments)
+														)}
+													</>
+												) : (
+													<>
+														<div className="home-summary-insights-column">
+															{summary.error ? (
+																renderSummaryError(summary)
+															) : (
+																<div className="home-insight-points">
+																	{summary.insights.slice(0, 4).map((insight, index) => {
+																		const displayInsight = getDisplayInsight(insight, index);
+																		return (
+																			<div key={`${displayInsight.title}-${displayInsight.description}`} className="home-insight-point">
+																				<span className="home-insight-point-emoji" aria-hidden="true">
+																					{displayInsight.emoji}
+																				</span>
+																				<div className="home-insight-point-copy">
+																					<h4>{displayInsight.title}</h4>
+																					<ReactMarkdown remarkPlugins={[remarkGfm]}>{displayInsight.description}</ReactMarkdown>
+																				</div>
+																			</div>
+																		);
+																	})}
 																</div>
-															);
-														})}
-													</div>
-												</div>
+															)}
+														</div>
 
-												{renderSummaryArtifacts(summary, generatedDocuments)}
+														{renderSummaryArtifacts(summary, summaryDocuments)}
+													</>
+												)}
 											</div>
 
 											{summary.nextSteps.length > 0 && (
@@ -1211,7 +1341,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 															key={`${nextStep.title}-${nextStep.prompt}`}
 															type="button"
 															className="home-next-step"
-															onClick={() => (onRunHomeTask ?? onSendMessage)(nextStep.prompt)}
+															onClick={() => runHomeTask(nextStep.prompt, session.id)}
 														>
 															<span className="home-next-step-main">
 																<span className="home-next-step-icon" aria-hidden="true">

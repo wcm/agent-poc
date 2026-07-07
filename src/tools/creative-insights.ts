@@ -39,11 +39,7 @@ class CreativeInsightsToolWrapper {
             throw new Error('No focus items available. Run focusItems first.');
         }
 
-        const reports: CreativeReport[] = [];
-
-        // Process each focused item
-        for (let i = 0; i < focusSet.items.length; i++) {
-            const item = focusSet.items[i];
+        const reportResults = await Promise.all(focusSet.items.map(async (item, i) => {
             logger.debug('CreativeInsightsTool', `Processing item ${i + 1}/${focusSet.items.length}`, {
                 itemId: item.id,
                 itemName: item.name,
@@ -52,7 +48,6 @@ class CreativeInsightsToolWrapper {
 
             try {
                 const report = await this.processItem(item, stepDescription, context);
-                reports.push(report);
 
                 // Stream the report to frontend
                 stream({
@@ -75,14 +70,21 @@ class CreativeInsightsToolWrapper {
                     }
                 });
 
-                // Add to context
-                context.creativeReports.push(report);
+                return { index: i, report };
 
             } catch (error: any) {
                 logger.log('ERROR', { component: 'CreativeInsightsTool', action: 'ANALYZE' }, error.message);
                 stream({ type: 'text', content: `⚠️ Could not analyze ${item.name}: ${error.message}` });
+                return { index: i, report: null };
             }
-        }
+        }));
+
+        const reports = reportResults
+            .sort((a, b) => a.index - b.index)
+            .map((result) => result.report)
+            .filter((report): report is CreativeReport => report !== null);
+
+        context.creativeReports.push(...reports);
 
         return { reports };
     }
@@ -245,4 +247,3 @@ Analyze this ad copy for persuasion techniques, benefit focus, and improvement o
 }
 
 export const creativeInsightsTool = new CreativeInsightsToolWrapper();
-

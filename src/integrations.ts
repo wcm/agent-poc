@@ -45,6 +45,13 @@ const INTEGRATION_REGISTRY: IntegrationRegistryItem[] = [
         keywords: ['shopify', 'store sales', 'shopify sales', 'shopify products']
     },
     {
+        id: 'brand_guidelines',
+        name: 'Brand Guidelines',
+        availability: 'available',
+        capabilities: ['read brand rules', 'read tone of voice', 'support brand-safe creative generation'],
+        keywords: ['brand guidelines', 'brand guide', 'style guide', 'brand rules', 'brand voice', 'creative guidelines']
+    },
+    {
         id: 'slack',
         name: 'Slack',
         availability: 'available',

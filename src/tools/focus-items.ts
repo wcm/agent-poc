@@ -3,7 +3,8 @@ import { GlobalContext, FocusItemSet, getLatestAnyDataSet, generateId, AdData, D
 import { FocusedItemCard } from '../types';
 import { logger } from '../utils/logger';
 
-const MAX_FOCUS_ITEMS = 3;
+const MAX_FOCUS_ITEMS = 4;
+const DEFAULT_GENERATION_REFERENCE_COUNT = 1;
 
 /**
  * FocusItems Tool Result
@@ -34,32 +35,80 @@ Given a dataset and selection criteria, identify which items to focus on for det
 Return a JSON object:
 {
     "selectedIds": ["id1", "id2", ...],
-    "summary": "Brief description of what was selected (e.g., 'Top 3 performers by ROAS')",
+    "summary": "Brief description of what was selected (e.g., 'Top 4 performers by ROAS')",
     "selectionReason": "Why these items were selected"
 }
 
 ## SELECTION RULES
-1. Select at most 3 items. If "top N", "worst N", "all", or a larger count is requested, cap the selection at 3.
-2. If "top N" is requested, select the first N items up to the 3-item cap (data is pre-sorted)
-3. If "worst/bottom N" is requested, select from the end up to the 3-item cap (or first N if sorted ascending)
-4. Default to selecting 3 items unless specified otherwise
-5. If the task is about generating ad variations, ad concepts, or new creatives and no count is specified, default to selecting 1 item
+1. Select at most 4 items. If "top N", "worst N", "all", or a larger count is requested, cap the selection at 4.
+2. If "top N" is requested, select the first N items up to the 4-item cap (data is pre-sorted)
+3. If "worst/bottom N" is requested, select from the end up to the 4-item cap (or first N if sorted ascending)
+4. Default to selecting 4 items unless specified otherwise
+5. If the task is about generating ad variations, ad concepts, scripts, or new creatives and no count is specified, default to selecting 1 creative reference item
 6. Match the user's intent from the task description
 7. Return actual IDs from the data (don't make them up)
 
 ## EXAMPLES
 
-Task: "Select top 3 high-spend ads"
+Task: "Select top 4 high-spend ads"
 Data sorted by spend DESC
-→ Select first 3 items
+→ Select first 4 items
 
 Task: "Select worst performing ads"
 Data sorted by ROAS ASC
-→ Select first 3 items (lowest ROAS)
+→ Select first 4 items (lowest ROAS)
 
 Task: "Select top 5 video ads"
-→ Select first 3 items (assuming data is filtered to videos, capped at 3)`
+→ Select first 4 items (assuming data is filtered to videos, capped at 4)`
         });
+    }
+
+    private isGenerationTask(stepDescription: string, userInput: string): boolean {
+        const text = `${stepDescription}\n${userInput}`.toLowerCase();
+        return /\b(generate|create|make|adapt|iterate|variation|variant|concept|script|new creatives?|new ads?)\b/.test(text);
+    }
+
+    private hasExplicitReferenceCount(stepDescription: string, userInput: string): boolean {
+        const text = `${stepDescription}\n${userInput}`.toLowerCase();
+        return /\b(?:single|one|two|three|four|1|2|3|4|both)\s+(?:\w+\s+){0,3}?(?:ads?|items?|creatives?|references?|sources?|images?|videos?)\b/.test(text);
+    }
+
+    private ensureDefaultGenerationReferences<T extends { id?: string }>(
+        selectedItems: T[],
+        allItems: T[],
+        stepDescription: string,
+        context: GlobalContext
+    ): T[] {
+        const targetCount = Math.min(DEFAULT_GENERATION_REFERENCE_COUNT, allItems.length);
+        const shouldUseDefaultGenerationCount =
+            this.isGenerationTask(stepDescription, context.userInput) &&
+            !this.hasExplicitReferenceCount(stepDescription, context.userInput);
+
+        if (!shouldUseDefaultGenerationCount) {
+            return selectedItems;
+        }
+
+        const supplementedItems = selectedItems.slice(0, targetCount);
+        const selectedIds = new Set(supplementedItems.map((item) => item.id).filter(Boolean));
+
+        if (supplementedItems.length >= targetCount) {
+            return supplementedItems;
+        }
+
+        for (const item of allItems) {
+            if (supplementedItems.length >= targetCount) {
+                break;
+            }
+
+            if (!item.id || selectedIds.has(item.id)) {
+                continue;
+            }
+
+            supplementedItems.push(item);
+            selectedIds.add(item.id);
+        }
+
+        return supplementedItems.slice(0, targetCount);
     }
 
     /**
@@ -123,7 +172,7 @@ Select the appropriate items based on the task.
                 if (match) {
                     selection = JSON.parse(match[0]);
                 } else {
-                    // Default fallback - select first 3
+                    // Default fallback - select first focus items
                     selection = {
                         selectedIds: dataSet.data.slice(0, MAX_FOCUS_ITEMS).map((d: any) => d.id),
                         summary: `Top ${Math.min(MAX_FOCUS_ITEMS, dataSet.data.length)} items`,
@@ -134,7 +183,12 @@ Select the appropriate items based on the task.
 
             // Find selected items in dataset
             const cappedSelectedIds = Array.isArray(selection.selectedIds) ? selection.selectedIds.slice(0, MAX_FOCUS_ITEMS) : [];
-            const selectedItems = this.findSelectedItems(cappedSelectedIds, dataSet.data as any[], isDiscovery).slice(0, MAX_FOCUS_ITEMS);
+            const selectedItems = this.ensureDefaultGenerationReferences(
+                this.findSelectedItems(cappedSelectedIds, dataSet.data as any[], isDiscovery).slice(0, MAX_FOCUS_ITEMS),
+                dataSet.data as any[],
+                stepDescription,
+                context
+            );
             
             // Convert to FocusedItemCard format
             const focusedCards: FocusedItemCard[] = selectedItems.map(item => {
@@ -187,7 +241,7 @@ Select the appropriate items based on the task.
         } catch (error) {
             logger.log('ERROR', { component: 'FocusItemsTool', action: 'SELECT' }, String(error));
             
-            // Fallback: select first 3 items
+            // Fallback: select first focus items
             const fallbackItems = dataSet.data.slice(0, MAX_FOCUS_ITEMS) as any[];
             const focusedCards: FocusedItemCard[] = fallbackItems.map(item => {
                 if (isDiscovery) {

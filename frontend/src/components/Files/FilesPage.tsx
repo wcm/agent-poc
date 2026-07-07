@@ -4,6 +4,8 @@ import { GeneratedImageAdFile, GeneratedImageAdsManifest } from "../../types";
 
 interface FilesPageProps {
 	baseUrl: string;
+	isBrandGuidelinesConnected?: boolean;
+	onConnectBrandGuidelines?: () => void;
 }
 
 type StatusFilter = "all" | "done" | "failed";
@@ -56,7 +58,7 @@ const getRawResponsePreview = (file: GeneratedImageAdFile) => {
 	return `${serialized.slice(0, 18000)}\n\n... truncated for display. Full response is saved in the local manifest file.`;
 };
 
-const FilesPage: React.FC<FilesPageProps> = ({ baseUrl }) => {
+const FilesPage: React.FC<FilesPageProps> = ({ baseUrl, isBrandGuidelinesConnected = false, onConnectBrandGuidelines }) => {
 	const [manifest, setManifest] = useState<GeneratedImageAdsManifest>(emptyManifest);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
@@ -142,13 +144,24 @@ const FilesPage: React.FC<FilesPageProps> = ({ baseUrl }) => {
 	}, [images, query, sourceFilter, statusFilter, tagFilter, sortOption]);
 
 	const handleGenerate = async () => {
+		if (!isBrandGuidelinesConnected) {
+			setError("Brand Guidelines connection required before generating image variations.");
+			return;
+		}
+
 		setIsGenerating(true);
 		setError(null);
 		try {
 			const response = await fetch(`${baseUrl}/api/files/generated-image-ads/generate`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ count: 12, conceptsPerSource: 4, integrationId: "meta_ads" }),
+				body: JSON.stringify({
+					count: 12,
+					conceptsPerSource: 4,
+					integrationId: "meta_ads",
+					brandGuidelinesConnected: true,
+					integrations: [{ id: "brand_guidelines", name: "Brand Guidelines", status: "connected" }],
+				}),
 			});
 
 			const data = await response.json();
@@ -193,6 +206,19 @@ const FilesPage: React.FC<FilesPageProps> = ({ baseUrl }) => {
 						</button>
 					</div>
 				</div>
+
+				{!isBrandGuidelinesConnected && (
+					<div className="files-connection-card">
+						<div>
+							<strong>Brand Guidelines connection required</strong>
+							<span>Connect brand rules and creative guardrails before generating new image variations.</span>
+						</div>
+						<button type="button" className="files-secondary-btn" onClick={onConnectBrandGuidelines}>
+							<Sparkles size={16} />
+							Connect Brand Guidelines
+						</button>
+					</div>
+				)}
 
 				<div className="files-stats-row">
 					<div className="files-stat-card">

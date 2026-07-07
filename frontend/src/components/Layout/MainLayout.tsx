@@ -1,7 +1,25 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import ChatInterface from "../Chat/ChatInterface";
-import { AnalyticsDashboardView, Message, Session, SessionContext, StreamedSection, PlanTask, SSEEvent, PlanEvent, PlanStatusEvent, Integration, Brand, RayaView } from "../../types";
+import {
+	AnalyticsDashboardView,
+	Message,
+	Session,
+	SessionContext,
+	StreamedSection,
+	PlanTask,
+	SSEEvent,
+	PlanEvent,
+	PlanStatusEvent,
+	Integration,
+	Brand,
+	RayaView,
+	SummaryLayout,
+	PreviousRunArtifactContext,
+	PreviousRunContext,
+	PreviousRunReportContext,
+	PreviousRunStepContext,
+} from "../../types";
 import DiscoveryFeed from "../Discovery/DiscoveryFeed";
 import FollowingBrands from "../Discovery/FollowingBrands";
 import BrandDetails from "../Discovery/BrandDetails";
@@ -11,6 +29,7 @@ import IntegrationsPage from "../Integrations/IntegrationsPage";
 import AutomationsPage from "../Automations/AutomationsPage";
 import FilesPage from "../Files/FilesPage";
 import Home2Page from "../Home2/Home2Page";
+import OnboardingPage from "../Onboarding/OnboardingPage";
 import { AutomationDefinition, AUTOMATION_STATE_STORAGE_KEY, getInitialAutomations, mergePersistedAutomations } from "../../automations/catalog";
 import type { Home2SectionId } from "../../home/home2Tasks";
 import {
@@ -18,7 +37,7 @@ import {
 	getConnectableIntegrationId,
 	getInitialIntegrationState,
 	getIntegrationDefinitionById,
-	INTEGRATION_STATE_STORAGE_KEY,
+	BRAND_GUIDELINES_INTEGRATION_ID,
 	IntegrationState,
 	resolveIntegrations,
 	ResolvedIntegration,
@@ -35,7 +54,10 @@ interface SendMessageOptions {
 		sectionId: Home2SectionId;
 		taskId: string;
 		taskIndex: number;
+		summaryLayout?: SummaryLayout;
+		sourceSessionId?: string;
 	};
+	sourceSessionId?: string;
 	seedMessages?: Message[];
 	seedConversationHistory?: SeedConversationEntry[];
 }
@@ -51,6 +73,122 @@ const buildSeedConversationHistory = (messages: Message[]): SeedConversationEntr
 		}))
 		.filter((message) => message.content.length > 0);
 
+const getSessionSectionsForContext = (session: Session): StreamedSection[] => {
+	const sections: StreamedSection[] = [];
+	session.messages.forEach((message) => {
+		if (message.sections) {
+			sections.push(...message.sections);
+		}
+	});
+	sections.push(...session.streamingSections);
+	return sections;
+};
+
+const buildPreviousRunContextFromSession = (session: Session): PreviousRunContext => {
+	const sections = getSessionSectionsForContext(session);
+	const completedSteps: PreviousRunStepContext[] = [];
+	const completedStepKeys = new Set<string>();
+	const artifacts = new Map<string, PreviousRunArtifactContext>();
+	const focusItems = new Map<string, PreviousRunContext["focusItems"][number]>();
+	const reports = new Map<string, PreviousRunReportContext>();
+
+	const addArtifact = (artifact: PreviousRunArtifactContext) => {
+		if (!artifacts.has(artifact.id)) {
+			artifacts.set(artifact.id, artifact);
+		}
+	};
+
+	sections.forEach((section) => {
+		if (section.type === "plan") {
+			const tasks = session.planTaskStates[section.planId] ?? section.tasks;
+			tasks.forEach((task) => {
+				if (task.status !== "completed") {
+					return;
+				}
+
+				const stepKey = `${task.tool}:${task.description}`;
+				if (completedStepKeys.has(stepKey)) {
+					return;
+				}
+
+				completedStepKeys.add(stepKey);
+				completedSteps.push({
+					tool: task.tool,
+					description: task.description,
+				});
+			});
+			return;
+		}
+
+		if (section.type === "focused_items") {
+			section.items.forEach((item) => {
+				focusItems.set(item.id, item);
+			});
+			addArtifact({
+				id: `focus:${session.id}:${artifacts.size}`,
+				type: "focus_items",
+				title: `Focused items (${section.items.length})`,
+			});
+			return;
+		}
+
+		if (section.type === "report") {
+			reports.set(section.reportId, {
+				id: section.reportId,
+				reportType: section.reportType,
+				title: section.title,
+				content: section.content,
+				itemId: section.itemId,
+				itemName: section.itemName,
+				itemData: section.itemData,
+			});
+			addArtifact({
+				id: `report:${section.reportId}`,
+				type: "report",
+				title: section.title,
+			});
+			return;
+		}
+
+		if (section.type === "image_concepts") {
+			addArtifact({
+				id: `image:${section.itemId}`,
+				type: "image_concepts",
+				title: `Image concepts for ${section.itemName}`,
+			});
+			return;
+		}
+
+		if (section.type === "video_concepts") {
+			addArtifact({
+				id: `video:${section.itemId}`,
+				type: "video_concepts",
+				title: `Video scripts for ${section.itemName}`,
+			});
+		}
+	});
+
+	if (session.summary) {
+		addArtifact({
+			id: `summary:${session.id}`,
+			type: "summary",
+			title: "Run summary",
+		});
+	}
+
+	return {
+		sourceSessionId: session.id,
+		sourceTaskId: session.home2Run?.taskId,
+		title: session.title,
+		userRequest: session.messages.find((message) => message.role === "user")?.content,
+		summary: session.summary,
+		completedSteps,
+		artifacts: Array.from(artifacts.values()),
+		focusItems: Array.from(focusItems.values()),
+		reports: Array.from(reports.values()),
+	};
+};
+
 // Default empty session context
 const createEmptyContext = (): SessionContext => ({
 	performanceReports: [],
@@ -61,10 +199,26 @@ const createEmptyContext = (): SessionContext => ({
 	agentHistory: [],
 });
 
-const MainLayout: React.FC = () => {
+const normalizeFrontendIntegrations = (integrations: Integration[] = []): Integration[] =>
+	integrations.map((integration) => ({
+		...integration,
+		is_connected: false,
+	}));
+
+interface MainLayoutProps {
+	initialRayaView?: RayaView;
+	initialHome3SectionId?: Home2SectionId;
+	highlightHome3SectionId?: Home2SectionId;
+	onboardingMode?: boolean;
+}
+
+const MainLayout: React.FC<MainLayoutProps> = ({ initialRayaView, initialHome3SectionId, highlightHome3SectionId, onboardingMode = false }) => {
 	// Layout State
 	const [activeTab, setActiveTab] = useState("atria");
-	const [activeRayaView, setActiveRayaView] = useState<RayaView>("tasks");
+	const [activeRayaView, setActiveRayaView] = useState<RayaView>(initialRayaView ?? "home3");
+	const [isOnboardingMode, setIsOnboardingMode] = useState(onboardingMode);
+	const [home3InitialSectionId, setHome3InitialSectionId] = useState<Home2SectionId | undefined>(initialHome3SectionId);
+	const [home3HighlightSectionId, setHome3HighlightSectionId] = useState<Home2SectionId | undefined>(highlightHome3SectionId);
 	const [activeAutomationId, setActiveAutomationId] = useState<string | null>(null);
 	const [activeAutomationMode, setActiveAutomationMode] = useState<"overview" | "details" | "run">("overview");
 	const [activeAutomationRunId, setActiveAutomationRunId] = useState<string | null>(null);
@@ -81,25 +235,7 @@ const MainLayout: React.FC = () => {
 	const [activeIntegrationId, setActiveIntegrationId] = useState<string | null>(null);
 	const [selectedIntegrationIds, setSelectedIntegrationIds] = useState<string[]>([]);
 	const [activeAnalyticsView, setActiveAnalyticsView] = useState<AnalyticsDashboardView>("top_spend");
-	const [integrationState, setIntegrationState] = useState<IntegrationState>(() => {
-		const defaultState = getInitialIntegrationState();
-		if (typeof window === "undefined") {
-			return defaultState;
-		}
-
-		try {
-			const stored = window.localStorage.getItem(INTEGRATION_STATE_STORAGE_KEY);
-			if (!stored) {
-				return defaultState;
-			}
-
-			const parsed = JSON.parse(stored) as IntegrationState;
-			return { ...defaultState, ...parsed };
-		} catch (error) {
-			console.error("Failed to restore integration state:", error);
-			return defaultState;
-		}
-	});
+	const [integrationState, setIntegrationState] = useState<IntegrationState>(() => getInitialIntegrationState());
 	const [automations, setAutomations] = useState<AutomationDefinition[]>(() => {
 		const defaultAutomations = getInitialAutomations();
 		if (typeof window === "undefined") {
@@ -138,12 +274,8 @@ const MainLayout: React.FC = () => {
 	}, [activeTab]);
 
 	useEffect(() => {
-		try {
-			window.localStorage.setItem(INTEGRATION_STATE_STORAGE_KEY, JSON.stringify(integrationState));
-		} catch (error) {
-			console.error("Failed to persist integration state:", error);
-		}
-	}, [integrationState]);
+		setIsOnboardingMode(onboardingMode);
+	}, [onboardingMode]);
 
 	useEffect(() => {
 		try {
@@ -175,6 +307,22 @@ const MainLayout: React.FC = () => {
 		return activeTabRef.current === "atria" && activeSessionIdRef.current === sessionId;
 	}, []);
 
+	const buildPreviousRunContext = useCallback(
+		(sourceSessionId?: string) => {
+			if (!sourceSessionId) {
+				return undefined;
+			}
+
+			const sourceSession = sessions.find((session) => session.id === sourceSessionId);
+			if (!sourceSession) {
+				return undefined;
+			}
+
+			return buildPreviousRunContextFromSession(sourceSession);
+		},
+		[sessions]
+	);
+
 	const markSessionRead = useCallback(
 		(sessionId: string | null) => {
 			if (!sessionId) return;
@@ -191,6 +339,30 @@ const MainLayout: React.FC = () => {
 		}
 	}, []);
 
+	const createStreamContextParam = useCallback(
+		async (contextData: unknown) => {
+			const response = await fetch(`${baseUrl}/api/stream/context`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ context: contextData }),
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to register stream context (${response.status})`);
+			}
+
+			const data = (await response.json()) as { contextId?: string };
+			if (!data.contextId) {
+				throw new Error("Stream context registration did not return a context ID.");
+			}
+
+			return `&contextId=${encodeURIComponent(data.contextId)}`;
+		},
+		[baseUrl]
+	);
+
 	useEffect(() => {
 		const activeStreams = eventSourcesRef.current;
 		return () => {
@@ -206,13 +378,9 @@ const MainLayout: React.FC = () => {
 		fetch(`${baseUrl}/api/own-analytics`)
 			.then((res) => res.json())
 			.then((data) => {
-				const loadedIntegrations = data.integrations;
+				const loadedIntegrations = normalizeFrontendIntegrations(data.integrations);
 				if (loadedIntegrations) {
 					setIntegrations(loadedIntegrations);
-					const firstConnected = loadedIntegrations.find((integration: Integration) => integration.is_connected);
-					if (firstConnected) {
-						setActiveIntegrationId(firstConnected.id);
-					}
 				}
 			})
 			.catch((err) => console.error("Failed to fetch integrations:", err));
@@ -274,18 +442,9 @@ const MainLayout: React.FC = () => {
 		try {
 			const res = await fetch(`${baseUrl}/api/own-analytics`);
 			const data = await res.json();
-			const loadedIntegrations = data.integrations;
+			const loadedIntegrations = normalizeFrontendIntegrations(data.integrations);
 			if (loadedIntegrations) {
 				setIntegrations(loadedIntegrations);
-				const connectedIntegrations = loadedIntegrations.filter((integration: Integration) => integration.is_connected);
-				if (!activeIntegrationId && connectedIntegrations.length > 0) {
-					setActiveIntegrationId(connectedIntegrations[0].id);
-				}
-				setSelectedIntegrationIds((currentSelection) => {
-					const connectedIds = new Set(connectedIntegrations.map((integration: Integration) => integration.id));
-					const validSelection = currentSelection.filter((id) => connectedIds.has(id));
-					return validSelection;
-				});
 			}
 		} catch (err) {
 			console.error("Failed to fetch integrations:", err);
@@ -318,6 +477,12 @@ const MainLayout: React.FC = () => {
 		if (!res.ok) {
 			throw new Error("Failed to connect integration");
 		}
+		setIntegrationState((prev) => ({
+			...prev,
+			[integrationId]: true,
+		}));
+		setActiveIntegrationId(integrationId);
+		setSelectedIntegrationIds((currentSelection) => (currentSelection.includes(integrationId) ? currentSelection : [...currentSelection, integrationId]));
 	};
 
 	const handleIntegrationDisconnect = async (integrationId: string) => {
@@ -325,6 +490,12 @@ const MainLayout: React.FC = () => {
 		if (!res.ok) {
 			throw new Error("Failed to disconnect integration");
 		}
+		setIntegrationState((prev) => ({
+			...prev,
+			[integrationId]: false,
+		}));
+		setSelectedIntegrationIds((currentSelection) => currentSelection.filter((id) => id !== integrationId));
+		setActiveIntegrationId((currentActiveId) => (currentActiveId === integrationId ? null : currentActiveId));
 	};
 
 	const handleIntegrationStateConnect = useCallback((integrationId: string) => {
@@ -339,6 +510,8 @@ const MainLayout: React.FC = () => {
 			...prev,
 			[integrationId]: false,
 		}));
+		setSelectedIntegrationIds((currentSelection) => currentSelection.filter((id) => id !== integrationId));
+		setActiveIntegrationId((currentActiveId) => (currentActiveId === integrationId ? null : currentActiveId));
 	}, []);
 
 	const getAgentIntegrationContext = useCallback(
@@ -670,7 +843,7 @@ const MainLayout: React.FC = () => {
 		content: string,
 		context?: { integration?: Integration; brands?: Brand[] },
 		options?: SendMessageOptions
-	) => {
+	): Promise<string | null> => {
 		setActiveRayaView(options?.targetRayaView ?? "tasks");
 		setActiveAutomationId(null);
 		setActiveAutomationMode("overview");
@@ -707,7 +880,7 @@ const MainLayout: React.FC = () => {
 			}
 		} else {
 			if (existingSession.status === "running") {
-				return;
+				return currentSessionId;
 			}
 
 			updateSession(currentSessionId, (session) => ({
@@ -726,7 +899,7 @@ const MainLayout: React.FC = () => {
 
 		const sessionId = currentSessionId;
 		if (!sessionId) {
-			return;
+			return null;
 		}
 
 		closeSessionStream(sessionId);
@@ -737,13 +910,41 @@ const MainLayout: React.FC = () => {
 
 		let contextParam = "";
 		const integrationContext = getAgentIntegrationContext();
+		const sourceSessionId = options?.sourceSessionId ?? options?.home2Run?.sourceSessionId;
+		const previousRun = buildPreviousRunContext(sourceSessionId);
+		const runMetadata =
+			options?.home2Run || sourceSessionId
+				? {
+						taskId: options?.home2Run?.taskId,
+						summaryLayout: options?.home2Run?.summaryLayout,
+						sourceSessionId,
+					}
+				: undefined;
 		const contextData = {
 			integration: context?.integration ?? mockIntegration,
 			brands: context?.brands,
 			integrations: integrationContext,
 			conversationHistory: options?.seedConversationHistory,
+			runMetadata,
+			previousRun,
 		};
-		contextParam = `&context=${encodeURIComponent(JSON.stringify(contextData))}`;
+		try {
+			contextParam = await createStreamContextParam(contextData);
+		} catch (error) {
+			console.error("Failed to register stream context:", error);
+			updateSession(sessionId, (session) => ({
+				...session,
+				lastActivityAt: Date.now(),
+				status: "failed",
+				streamingSections: [
+					{
+						type: "text",
+						content: "⚠️ Error: Failed to prepare task context before starting the run.",
+					},
+				],
+			}));
+			return sessionId;
+		}
 
 		const apiUrl = `${baseUrl}/api/stream?message=${encodeURIComponent(content)}${integrationParam}${sessionParam}${contextParam}`;
 		const eventSource = new EventSource(apiUrl);
@@ -788,60 +989,81 @@ const MainLayout: React.FC = () => {
 				};
 			});
 		};
+
+		return sessionId;
 	};
 
-	const handleRunHomeTask = async (prompt: string) => {
-		await handleSendMessage(prompt, undefined, {
+	const handleRunHomeTask = async (prompt: string, sourceSessionId?: string) => {
+		return handleSendMessage(prompt, undefined, {
 			forceNewSession: true,
 			stayOnHome: true,
+			sourceSessionId,
 		});
 	};
 
-	const handleRunHome2Task = async (sectionId: Home2SectionId, taskIndex: number, prompt: string, taskId?: string) => {
-		await handleSendMessage(prompt, undefined, {
+	const handleRunHome2Task = async (
+		sectionId: Home2SectionId,
+		taskIndex: number,
+		prompt: string,
+		taskId?: string,
+		summaryLayout?: SummaryLayout,
+		sourceSessionId?: string
+	) => {
+		return handleSendMessage(prompt, undefined, {
 			forceNewSession: true,
 			stayOnHome: true,
 			targetRayaView: "home2",
+			sourceSessionId,
 			home2Run: {
-				surface: "home2",
 				sectionId,
 				taskId: taskId ?? `${sectionId}-${taskIndex}`,
 				taskIndex,
+				summaryLayout,
+				sourceSessionId,
 			},
 		});
 	};
 
 	const handleRunHome2ComposerMessage = async (prompt: string) => {
-		await handleSendMessage(prompt, undefined, {
+		return handleSendMessage(prompt, undefined, {
 			forceNewSession: true,
 			stayOnHome: true,
 			targetRayaView: "home2",
 		});
 	};
 
-	const handleRunHome3Task = async (sectionId: Home2SectionId, taskIndex: number, prompt: string, taskId?: string) => {
-		await handleSendMessage(prompt, undefined, {
+	const handleRunHome3Task = async (
+		sectionId: Home2SectionId,
+		taskIndex: number,
+		prompt: string,
+		taskId?: string,
+		summaryLayout?: SummaryLayout,
+		sourceSessionId?: string
+	) => {
+		return handleSendMessage(prompt, undefined, {
 			forceNewSession: true,
 			stayOnHome: true,
 			targetRayaView: "home3",
+			sourceSessionId,
 			home2Run: {
-				surface: "home3",
 				sectionId,
 				taskId: taskId ?? `${sectionId}-${taskIndex}`,
 				taskIndex,
+				summaryLayout,
+				sourceSessionId,
 			},
 		});
 	};
 
 	const handleRunHome3ComposerMessage = async (prompt: string) => {
-		await handleSendMessage(prompt, undefined, {
+		return handleSendMessage(prompt, undefined, {
 			forceNewSession: true,
 			stayOnHome: true,
 			targetRayaView: "home3",
 		});
 	};
 
-	const resumeBlockedSession = (sessionId: string, integrationId: string) => {
+	const resumeBlockedSession = async (sessionId: string, integrationId: string) => {
 		closeSessionStream(sessionId);
 
 		const mockIntegration = integrations.find((integration) => integration.id === "meta_ads") || integrations[0];
@@ -851,7 +1073,25 @@ const MainLayout: React.FC = () => {
 			integration: mockIntegration,
 			integrations: getAgentIntegrationContext(integrationId),
 		};
-		const contextParam = `&context=${encodeURIComponent(JSON.stringify(contextData))}`;
+		let contextParam = "";
+		try {
+			contextParam = await createStreamContextParam(contextData);
+		} catch (error) {
+			console.error("Failed to register resume stream context:", error);
+			updateSession(sessionId, (session) => ({
+				...session,
+				lastActivityAt: Date.now(),
+				status: "failed",
+				streamingSections: [
+					...session.streamingSections,
+					{
+						type: "text",
+						content: "⚠️ Error: Failed to prepare connection context before resuming the task.",
+					},
+				],
+			}));
+			return;
+		}
 		const apiUrl = `${baseUrl}/api/stream/resume?${sessionParam.slice(1)}${integrationParam}${contextParam}`;
 		const eventSource = new EventSource(apiUrl);
 		eventSourcesRef.current.set(sessionId, eventSource);
@@ -945,7 +1185,7 @@ const MainLayout: React.FC = () => {
 					},
 				],
 			}));
-			resumeBlockedSession(sessionId, integrationId);
+			await resumeBlockedSession(sessionId, integrationId);
 		} catch (error) {
 			console.error("Failed to connect required integration:", error);
 		}
@@ -971,6 +1211,40 @@ const MainLayout: React.FC = () => {
 	const resolvedIntegrations = resolveIntegrations(integrations, integrationState);
 	const connectedIntegrations = resolvedIntegrations.filter((integration) => integration.isConnected);
 	const myConnections = resolvedIntegrations.filter((integration) => integration.section === "myConnections");
+	const isBrandGuidelinesConnected = resolvedIntegrations.some(
+		(integration) => integration.id === BRAND_GUIDELINES_INTEGRATION_ID && integration.isConnected
+	);
+
+	const completeOnboarding = () => {
+		window.history.pushState({}, "", "/?view=home3&section=competitor-intelligence&highlight=ad-performance&onboarding=complete");
+		setActiveTab("atria");
+		setActiveRayaView("home3");
+		setHome3InitialSectionId("competitor-intelligence");
+		setHome3HighlightSectionId("ad-performance");
+		setIsOnboardingMode(false);
+	};
+
+	const handleOnboardingSessionSelect = (sessionId: string) => {
+		window.history.pushState({}, "", "/");
+		setIsOnboardingMode(false);
+		handleSessionSelect(sessionId);
+	};
+
+	if (isOnboardingMode) {
+		return (
+			<OnboardingPage
+				sessions={sessions}
+				onRunTask={handleRunHome3Task}
+				onSessionSelect={handleOnboardingSessionSelect}
+				onConnectRequiredIntegration={handleConnectRequiredIntegration}
+				onOpenBrandContext={() => setActiveRayaView("brandContext")}
+				onConnectSlack={() => handleIntegrationStateConnect("slack")}
+				onComplete={completeOnboarding}
+				activeBrand={activeBrand}
+				isBrandGuidelinesConnected={isBrandGuidelinesConnected}
+			/>
+		);
+	}
 
 	return (
 		<div className="main-layout">
@@ -1046,8 +1320,11 @@ const MainLayout: React.FC = () => {
 							onConnectRequiredIntegration={handleConnectRequiredIntegration}
 							onOpenBrandContext={() => setActiveRayaView("brandContext")}
 							activeBrand={activeBrand}
+							isBrandGuidelinesConnected={isBrandGuidelinesConnected}
 							surface={activeRayaView}
 							layout={activeRayaView === "home3" ? "tabs" : "sections"}
+							initialTabbedSectionId={activeRayaView === "home3" ? home3InitialSectionId : undefined}
+							highlightSectionId={activeRayaView === "home3" ? home3HighlightSectionId : undefined}
 						/>
 					) : (
 						<ChatInterface
@@ -1072,6 +1349,7 @@ const MainLayout: React.FC = () => {
 							myConnections={myConnections}
 							activeIntegrationId={activeIntegrationId}
 							activeBrand={activeBrand}
+							isBrandGuidelinesConnected={isBrandGuidelinesConnected}
 							selectedIntegrationIds={selectedIntegrationIds}
 							onSelectedIntegrationIdsChange={handleSelectedIntegrationIdsChange}
 							onConnectMyConnection={handleIntegrationStateConnect}
@@ -1096,7 +1374,11 @@ const MainLayout: React.FC = () => {
 						dashboardView={activeAnalyticsView}
 					/>
 				) : activeTab === "files" ? (
-					<FilesPage baseUrl={baseUrl} />
+					<FilesPage
+						baseUrl={baseUrl}
+						isBrandGuidelinesConnected={isBrandGuidelinesConnected}
+						onConnectBrandGuidelines={() => handleIntegrationStateConnect(BRAND_GUIDELINES_INTEGRATION_ID)}
+					/>
 				) : (
 					<div className="placeholder-content">
 						<h1>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1>
