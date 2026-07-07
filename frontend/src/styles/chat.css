@@ -1909,7 +1909,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  animation: homeRunningFeedIn 0.28s ease;
+  animation: homeRunningFeedIn 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
 }
 
 .home-running-feed-item {
@@ -2081,11 +2082,12 @@
 }
 
 @keyframes homeRunningFeedIn {
-  0% {
-    opacity: 0.72;
-    transform: translateY(8px);
+  from {
+    opacity: 0;
+    transform: translateY(16px);
   }
-  100% {
+
+  to {
     opacity: 1;
     transform: translateY(0);
   }

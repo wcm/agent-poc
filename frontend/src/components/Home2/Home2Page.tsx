@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Clock, FileText, Heart, Image as ImageIcon, Lightbulb, Paperclip, Plug, Search, Settings, Sparkles, Target } from "lucide-react";
+import { AlertTriangle, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Clock, FileText, Heart, Image as ImageIcon, Lightbulb, Paperclip, Plug, Search, SlidersHorizontal, Sparkles, Target } from "lucide-react";
 import { HOME2_SECTIONS, Home2Section, Home2SectionId, Home2Task } from "../../home/home2Tasks";
 import { FocusedItemCard, RunSummary, Session, StreamedSection, SummaryChart, SummaryCreative, SummaryLayout } from "../../types";
 import { getIntegrationDefinitionById } from "../../integrations/catalog";
@@ -715,6 +715,7 @@ const Home2Page: React.FC<Home2PageProps> = ({
 		const activeToolName = activeTask?.tool.replace(/([A-Z])/g, " $1").replace(/^./, (value) => value.toUpperCase()) ?? "Planning";
 		const activity = getRunningSessionActivity(session);
 		const feedItems = getRunningSessionFeed(session);
+		const feedAnimationKey = feedItems.length > 0 ? `${session.lastActivityAt}-${feedItems[feedItems.length - 1].id}` : `${session.lastActivityAt}-activity`;
 		const blockingIntegration = getBlockingIntegrationResult(session);
 
 		return (
@@ -743,25 +744,29 @@ const Home2Page: React.FC<Home2PageProps> = ({
 				</div>
 
 				<div className="home2-running-feed" aria-label="Live task messages">
-					{feedItems.length > 0 ? (
-						feedItems.map((item) => (
-							<div key={item.id} className="home2-running-feed-item">
-								<span>{item.label}</span>
-								<p>{item.text}</p>
+					<div key={feedAnimationKey} className="home2-running-feed-list">
+						{feedItems.length > 0 ? (
+							feedItems.map((item) => (
+								<div key={item.id} className="home2-running-feed-item">
+									<span>{item.label}</span>
+									<p>{item.text}</p>
+								</div>
+							))
+						) : (
+							<div className="home2-running-feed-item">
+								<span>Update</span>
+								<p>{activity}</p>
 							</div>
-						))
-					) : (
-						<div className="home2-running-feed-item">
-							<span>Update</span>
-							<p>{activity}</p>
-						</div>
-					)}
+						)}
+					</div>
 				</div>
 
 				{!blockingIntegration && (
 					<span className="home2-run-meta home2-running-status-meta">
 						<img src={rayaThinkingGif} alt="" />
-						Running now
+						<span className="home2-running-status-text">
+							Running now<span className="home2-running-status-dots" aria-hidden="true" />
+						</span>
 					</span>
 				)}
 
@@ -1052,8 +1057,9 @@ const Home2Page: React.FC<Home2PageProps> = ({
 						</span>
 					</div>
 					<div className="home2-run-actions">
-						<button type="button" className="home2-settings-btn" aria-label="Summary settings" title="Summary settings">
-							<Settings size={16} />
+						<button type="button" className="home2-settings-btn" aria-label="Customize summary" title="Customize summary">
+							<SlidersHorizontal size={15} />
+							<span>Customize</span>
 						</button>
 						<button type="button" className="home2-view-details-btn" onClick={() => onSessionSelect(session.id)}>
 							View Details

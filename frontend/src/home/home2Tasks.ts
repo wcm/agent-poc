@@ -40,11 +40,11 @@ export const HOME2_SECTIONS: Home2Section[] = [
 			},
 			{
 				id: "adapt-competitor-concepts",
-				title: "Adapt top industry hooks to my own brand",
+				title: "Scale my own ads using the top industry hooks",
 				description: "Translate strong industry hooks into brand-safe ad ideas ready for creative production.",
 				summaryLayout: "creation",
 				prompt:
-					"Task name: Adapt top industry hooks to my own brand. Use the strongest industry hooks, concepts, angles, and formats as inspiration, then create new brand-safe ad concepts for this brand. Do not copy competitor assets verbatim. Preserve the proven strategic pattern, adapt it to the brand voice, and include hooks, visual direction, copy angles, and testing rationale.",
+					"Task name: Scale my own ads using the top industry hooks. Use the strongest industry hooks, concepts, angles, and formats as inspiration, then create new brand-safe ad concepts for this brand. Do not copy competitor assets verbatim. Preserve the proven strategic pattern, adapt it to the brand voice, and include hooks, visual direction, copy angles, and testing rationale.",
 			},
 		],
 	},
