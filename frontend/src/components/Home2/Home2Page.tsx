@@ -522,9 +522,6 @@ const Home2Page: React.FC<Home2PageProps> = ({
 
 	const renderHomeFixedComposer = () => (
 		<div className="home-fixed-composer-area">
-			<a className="home-onboarding-link" href="/onboarding">
-				Open onboarding
-			</a>
 			<form className="home-fixed-composer" onSubmit={handleComposerSubmit}>
 				<div className="composer-overlay-menu home-fixed-attachment-menu" ref={composerMenuRef}>
 					<button

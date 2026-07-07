@@ -333,6 +333,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 							{activeTab !== "atria" && activeTab !== "analytics" && activeTab !== "inspirations" && activeTab !== "files" && <div className="coming-soon">Nothing here yet.</div>}
 						</div>
+
+						{activeTab === "atria" && (
+							<div className="l2-footer">
+								<a className="sidebar-onboarding-btn" href="/onboarding">
+									Open onboarding
+								</a>
+							</div>
+						)}
 					</div>
 				)}
 			</div>

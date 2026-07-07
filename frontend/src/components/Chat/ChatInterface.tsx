@@ -1127,9 +1127,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
 	const renderHomeFixedComposer = () => (
 		<div className="home-fixed-composer-area">
-			<a className="home-onboarding-link" href="/onboarding">
-				Open onboarding
-			</a>
 			<form className="home-fixed-composer" onSubmit={handleHomeFixedSubmit}>
 				<div className="composer-overlay-menu home-fixed-attachment-menu" ref={composerMenuRef}>
 					<button
